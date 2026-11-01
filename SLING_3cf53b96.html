@@ -122,7 +122,7 @@ tr.limit td{border-bottom:2px solid var(--bad)}
   </div>
   <div class="gate" id="gate">
     <h2 style="font-size:22px">Live rig measurement</h2>
-    <p>Uses the rear camera and the tilt sensor. Nothing is recorded or uploaded.</p>
+    <p>Uses the rear camera. Nothing is recorded or uploaded.</p>
     <button class="fab" id="start">Start camera</button>
     <label class="btn" for="pick">Use a photo instead</label>
     <input id="pick" type="file" accept="image/*" hidden>
@@ -140,7 +140,6 @@ tr.limit td{border-bottom:2px solid var(--bad)}
       <label class="f" id="loadLbl">Rescue load (kg)<input type="number" id="load" min="0" step="any" inputmode="decimal"></label>
       <div class="presets" id="presets"></div>
     </div>
-    <label class="toggle"><input type="checkbox" id="tiltOn" checked> Correct for phone tilt (true vertical)</label>
     <div class="row">
       <label class="f" id="angLbl">Set internal angle<input type="number" id="angIn" min="0" max="178" step="1" inputmode="numeric" value="120"></label>
       <button class="btn" id="angGo">Apply °</button>
@@ -153,7 +152,7 @@ tr.limit td{border-bottom:2px solid var(--bad)}
     <p class="foot" id="refNote" style="margin-top:8px"></p>
   </details>
 
-  <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Hold the phone upright and square to the rig: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
+  <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Hold the phone upright, side-on and square to the rig: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
 </div>
 
 <div id="share-modal" hidden>
@@ -175,35 +174,18 @@ tr.limit td{border-bottom:2px solid var(--bad)}
 const G=0.00980665, $=id=>document.getElementById(id);
 const stage=$('stage'),vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
 const S={mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
-  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}},
-  tiltOn:true,sensor:false,up:null,pitch:null,frozenUp:null,frozenPitch:null};
-try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode;if(s.tiltOn===false)S.tiltOn=false}catch(e){}
-const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode,tiltOn:S.tiltOn}))}catch(e){}};
+  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}}};
+try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode}catch(e){}
+const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode}))}catch(e){}};
 
 let CW=0,CH=0,drag=null;
 function size(){const r=stage.getBoundingClientRect(),d=window.devicePixelRatio||1;CW=r.width;CH=r.height;
   cv.width=Math.round(CW*d);cv.height=Math.round(CH*d);ctx.setTransform(d,0,0,d,0,0)}
 const px=p=>[p[0]*CW,p[1]*CH];
 
-/* ---------- tilt sensor ---------- */
-let sgn=0,fx=0,fy=0,fz=0,lastMotion=0;
-function onMotion(e){const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
-  const a=((screen.orientation&&screen.orientation.angle)??window.orientation??0)*Math.PI/180;
-  const rx=g.x*Math.cos(a)-g.y*Math.sin(a), ry=g.x*Math.sin(a)+g.y*Math.cos(a);
-  const k=0.15;fx+= (rx-fx)*k;fy+=(ry-fy)*k;fz+=((g.z||0)-fz)*k;lastMotion=performance.now();
-  if(!sgn&&Math.abs(fy)>6)sgn=Math.sign(fy);
-  if(sgn){const ux=sgn*fx,uy=sgn*fy,l=Math.hypot(ux,uy);if(l>2){S.up=[ux/l,uy/l];S.pitch=Math.atan2(Math.abs(fz),l)*180/Math.PI;S.sensor=true}}
-}
-async function startSensors(){
-  try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
-    const r=await DeviceMotionEvent.requestPermission();if(r!=='granted')return}}catch(e){return}
-  window.addEventListener('devicemotion',onMotion);
-}
-
 /* ---------- camera ---------- */
 async function startCam(){
   $('gateErr').hidden=true;
-  await startSensors();
   if(!navigator.mediaDevices?.getUserMedia){gateErr(location.protocol==='https:'?'This browser has no camera access.':'Camera needs HTTPS. Host this file on GitHub Pages or Netlify, then open that link.');return}
   try{
     const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
@@ -214,33 +196,31 @@ async function startCam(){
 }
 function gateErr(m){const e=$('gateErr');e.textContent=m;e.hidden=false}
 function freeze(){
-  if(S.frozen&&S.live){S.frozen=null;S.frozenUp=null;vid.hidden=false;vid.play();setFreezeBtn();return}
+  if(S.frozen&&S.live){S.frozen=null;vid.hidden=false;vid.play();setFreezeBtn();return}
   if(!vid.videoWidth)return;
   const c=document.createElement('canvas');c.width=vid.videoWidth;c.height=vid.videoHeight;c.getContext('2d').drawImage(vid,0,0);
-  S.frozen=c;S.fit='cover';S.frozenUp=S.up?[...S.up]:null;S.frozenPitch=S.pitch;vid.pause();vid.hidden=true;setFreezeBtn();
+  S.frozen=c;S.fit='cover';vid.pause();vid.hidden=true;setFreezeBtn();
 }
 function setFreezeBtn(){const b=$('freeze');b.textContent=S.frozen?'Back to live':'Freeze';b.className=S.frozen?'fab ghost':'fab'}
 $('start').onclick=startCam;$('freeze').onclick=freeze;
 $('pick').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image();
   im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
-    S.frozen=c;S.fit='contain';S.frozenUp=null;S.frozenPitch=null;S.live=false;$('gate').hidden=true;$('shutter').hidden=true;vid.hidden=true};
+    S.frozen=c;S.fit='contain';S.live=false;$('gate').hidden=true;$('shutter').hidden=true;vid.hidden=true};
   im.src=URL.createObjectURL(f)};
 
 /* ---------- geometry ---------- */
-function curUp(){if(!S.tiltOn)return null;if(S.frozen)return S.frozenUp;return S.up}
-function curPitch(){return S.frozen?S.frozenPitch:S.pitch}
 function compute(){
   const p=S.pts[S.mode],[Px,Py]=px(p.P),[Ax,Ay]=px(p.A),[Bx,By]=px(p.B);
   let ax=Ax-Px,ay=-(Ay-Py),bx=Bx-Px,by=-(By-Py);const la=Math.hypot(ax,ay)||1,lb=Math.hypot(bx,by)||1;ax/=la;ay/=la;bx/=lb;by/=lb;
   const th=Math.acos(Math.max(-1,Math.min(1,ax*bx+ay*by)))*180/Math.PI;
-  const up=curUp(),Wn=S.load[S.mode]*G;
-  if(S.mode==='edge'){const R=2*Wn*Math.cos(th*Math.PI/360);return {ax,ay,bx,by,th,Wn,R,up}}
-  const rot=v=>up?[v[0]*up[1]-v[1]*up[0],v[0]*up[0]+v[1]*up[1]]:v;
+  const Wn=S.load[S.mode]*G;
+  if(S.mode==='edge'){const R=2*Wn*Math.cos(th*Math.PI/360);return {ax,ay,bx,by,th,Wn,R}}
+  const rot=v=>v;
   let qa=rot([ax,ay]),qb=rot([bx,by]);
-  if(S.mode==='track'){const den=qa[1]+qb[1],valid=den>0.01,T=valid?Wn/den:NaN;return {ax,ay,bx,by,th,Wn,T,valid,ratio:T/Wn,up}}
+  if(S.mode==='track'){const den=qa[1]+qb[1],valid=den>0.01,T=valid?Wn/den:NaN;return {ax,ay,bx,by,th,Wn,T,valid,ratio:T/Wn}}
   const D=qa[0]*qb[1]-qb[0]*qa[1];let TA=NaN,TB=NaN,valid=Math.abs(D)>1e-6;
   if(valid){TA=-Wn*qb[0]/D;TB=Wn*qa[0]/D;valid=TA>=0&&TB>=0}
-  return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN,up};
+  return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN};
 }
 const kg=v=>isFinite(v)?Math.round(v/G).toLocaleString():'—';
 const kn=v=>isFinite(v)?v.toFixed(2)+' kN':'';
@@ -254,15 +234,13 @@ function frame(){
   if(!S.live&&!S.frozen){requestAnimationFrame(frame);return}
   const r=compute(),p=S.pts[S.mode],P=px(p.P),A=px(p.A),B=px(p.B),C=null,rope='#f26a2e';
   ctx.lineCap='round';
-  if(r.up){const [ux,uy]=r.up;ctx.setLineDash([6,6]);ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();
-    ctx.moveTo(P[0]+ux*300,P[1]-uy*300);ctx.lineTo(P[0]-ux*300,P[1]+uy*300);ctx.stroke();ctx.setLineDash([])}
   for(const Q of [A,B]){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ln(P,Q);ctx.strokeStyle=rope;ctx.lineWidth=4;ln(P,Q)}
   if(C){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=6;ln(P,C);ctx.strokeStyle='#4c8dff';ctx.lineWidth=3;ln(P,C)}
   const a1=Math.atan2(-r.ay,r.ax),a2=Math.atan2(-r.by,r.bx);let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
   let S0=a1;ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
   const mid=S0+d/2;label(P[0]+Math.cos(mid)*60,P[1]+Math.sin(mid)*60,r.th.toFixed(0)+'°',true);
   const near=(Q,t)=>{const dx=Q[0]-P[0],dy=Q[1]-P[1],l=Math.hypot(dx,dy)||1;label(Q[0]+dx/l*40,Q[1]+dy/l*40,t)};
-  if(S.mode!=='edge'){const dn=r.up?[-r.up[0],r.up[1]]:[0,1];arrow(P,[P[0]+dn[0]*62,P[1]+dn[1]*62],'#e6edf4',kg(r.Wn)+' kg');
+  if(S.mode!=='edge'){arrow(P,[P[0],P[1]+62],'#e6edf4',kg(r.Wn)+' kg');
     if(r.valid){if(S.mode==='sling'){near(A,kg(r.TA)+' kg');near(B,kg(r.TB)+' kg')}else{near(A,kg(r.T)+' kg');near(B,kg(r.T)+' kg')}}}
   else{near(B,kg(r.Wn)+' kg');let ux=r.ax+r.bx,uy=-(r.ay+r.by);const l=Math.hypot(ux,uy);if(l>1e-3)arrow(P,[P[0]-ux/l*70,P[1]-uy/l*70],'#ff6b6b',kg(r.R)+' kg')}
   for(const [k,Q] of [['A',A],['B',B],...(C?[['C',C]]:[]),['P',P]]){ctx.fillStyle=k==='P'?rope:k==='C'?'#2f6fe0':'#132030';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
@@ -293,7 +271,7 @@ const cell=(l,v,s)=>`<div class="cell"><div class="lbl">${l}</div><div class="va
 function render(r){
   let h,c,t;
   if(S.mode==='sling'){
-    h=cell('Internal',r.th.toFixed(0)+'°',r.up?'tilt-corrected':'')+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
+    h=cell('Internal',r.th.toFixed(0)+'°','')+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
      +cell('Leg B',r.valid?kg(r.TB):'—','kg · '+(r.valid?kn(r.TB):''))+cell('Worst leg',r.valid?Math.round(r.worst*100)+'%':'—','of load');
     if(!r.valid){c='bad';t='<span>Not in balance.</span><span class="txt">Both legs sit on one side of the load or point down. It would swing. Re-check the points.</span>'}
     else if(r.worst<=0.7072){c='ok';t='<span>Good.</span><span class="txt">Each leg under 71% of the load.</span>'}
@@ -326,11 +304,7 @@ function table(r){
 let lastChips='';
 function chips(){
   let h='';
-  if(S.frozen&&S.fit==='contain')h+='<span class="chip">Photo · no tilt data</span>';
-  else if(!S.tiltOn)h+='<span class="chip warn">Tilt correction off</span>';
-  else{const up=curUp(),pi=curPitch();
-    if(!up)h+=`<span class="chip warn">${performance.now()-lastMotion>2000&&!S.sensor?'No tilt sensor · hold upright':'Calibrating · hold upright'}</span>`;
-  }
+  if(S.frozen&&S.fit==='contain')h+='<span class="chip">Photo</span>';
   if(S.frozen&&S.live)h+='<span class="chip">Frozen</span>';
   if(h!==lastChips){$('chips').innerHTML=h;lastChips=h}
 }
@@ -348,7 +322,7 @@ cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
 const loadIn=$('load');
 function syncUI(){
   $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
-  $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];$('tiltOn').checked=S.tiltOn;
+  $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];
   $('modeHint').textContent=({sling:'L on the load or apex, A and B up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A and B along each rope leg. Gives the load on that anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
   $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
   $('refNote').textContent=({sling:'Red rule marks 120° internal: each leg carries 100% of the load.',edge:'Red rule marks 120° internal: the anchor takes the full load. At 0° (rope doubled back) it takes double.',track:'Assumes the load sits at the low point with equal angles each side. Use the live readout for other positions.'})[S.mode];
@@ -359,9 +333,8 @@ function syncUI(){
 $('presets').addEventListener('click',e=>{const b=e.target.closest('.pre');if(!b)return;S.load[S.mode]=+b.dataset.v;save();syncUI()});
 loadIn.addEventListener('input',()=>{const v=parseFloat(loadIn.value);if(isFinite(v)&&v>=0){S.load[S.mode]=v;save();lastHTML=''}});
 $('m-sling').onclick=()=>{S.mode='sling';save();syncUI()};$('m-edge').onclick=()=>{S.mode='edge';save();syncUI()};$('m-track').onclick=()=>{S.mode='track';save();syncUI()};
-$('tiltOn').onchange=e=>{S.tiltOn=e.target.checked;save();lastHTML=''};
 $('angGo').onclick=()=>{let t=Math.max(0,Math.min(178,parseFloat($('angIn').value)||0));const h=t*Math.PI/360,L=0.38*Math.min(CW,CH);
-  const up=S.mode!=='edge'?(curUp()||[0,1]):[0,-1],[ux,uy]=up;
+  const [ux,uy]=S.mode!=='edge'?[0,1]:[0,-1];
   const P=[CW/2,(S.mode==='edge'?0.3:0.72)*CH];
   const dir=(ang)=>{const x=Math.sin(ang),y=Math.cos(ang);const rx=x*uy+y*ux,ry=-x*ux+y*uy;return [P[0]+rx*L,P[1]-ry*L]};
   const n=q=>[Math.max(0,Math.min(1,q[0]/CW)),Math.max(0,Math.min(1,q[1]/CH))];S.pts[S.mode]={...S.pts[S.mode],P:n(P),A:n(dir(-h)),B:n(dir(h))};lastHTML=''};
