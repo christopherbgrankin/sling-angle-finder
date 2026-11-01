@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sling Angle Finder</title>
+<meta name="theme-color" content="#0f1720">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sling Angle">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f1720'/%3E%3Cpath d='M10 14 L32 46 L54 18' stroke='%23f26a2e' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='46' r='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230f1720'/%3E%3Cpath d='M10 14 L32 46 L54 18' stroke='%23f26a2e' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='46' r='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Camera-first field tool, deliberately single dark theme for use outdoors and over video */
+:root{
+  --bg:#0f1720; --surface:#17222e; --raised:#1f2d3b; --ink:#e6edf4; --muted:#93a2b3; --line:#2a3847;
+  --accent:#f26a2e; --accent-ink:#0f1720;
+  --ok:#5fc470; --warn:#f0a83a; --bad:#ff6b6b; --okbg:#173022; --warnbg:#33260f; --badbg:#3a1a1c;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px))}
+h1{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:.03em;text-transform:uppercase;margin:0;line-height:1}
+h1 span{color:var(--accent)}
+.seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:8px;overflow:hidden}
+.seg button{font:600 12px/1 var(--body);letter-spacing:.06em;text-transform:uppercase;padding:9px 11px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible,label.btn:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+
+.stage{position:relative;height:58svh;min-height:280px;background:#000;overflow:hidden;touch-action:none}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage video{object-fit:cover}
+.chips{position:absolute;top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.chip{font:700 12px var(--mono);padding:5px 9px;border-radius:999px;background:rgba(15,23,32,.82);border:1px solid var(--line);color:var(--ink);font-variant-numeric:tabular-nums}
+.chip.ok{color:var(--ok);border-color:var(--ok)} .chip.warn{color:var(--warn);border-color:var(--warn)} .chip.bad{color:var(--bad);border-color:var(--bad)}
+.shutter{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center}
+.fab{font:700 14px/1 var(--body);letter-spacing:.05em;text-transform:uppercase;padding:14px 20px;border-radius:999px;border:2px solid #fff;background:var(--accent);color:var(--accent-ink);cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.5)}
+.fab.ghost{background:rgba(15,23,32,.8);color:#fff}
+.gate{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:radial-gradient(circle at 50% 40%,#1c2a38,#0b1118)}
+.gate p{margin:0;color:var(--muted);max-width:34ch}
+.gate .err{color:var(--bad)}
+
+.sheet{padding:12px max(14px,env(safe-area-inset-right,0px)) 28px max(14px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px;max-width:760px;margin:0 auto}
+.readout{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media (max-width:520px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.cell{background:var(--surface);padding:9px 10px 11px;min-width:0}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.val{font-family:var(--mono);font-weight:700;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:3px;white-space:nowrap}
+.sub{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.status{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;font-weight:600;border:1.5px solid currentColor}
+.status.ok{color:var(--ok);background:var(--okbg)} .status.warn{color:var(--warn);background:var(--warnbg)} .status.bad{color:var(--bad);background:var(--badbg)} .status.info{color:var(--muted);background:var(--surface)}
+.status .txt{color:var(--ink);font-weight:500}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:13px;display:flex;flex-direction:column;gap:11px}
+.row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+input[type=number]{font:700 20px var(--mono);width:120px;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.pre{font:500 13px var(--mono);padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.btn{font:600 14px/1 var(--body);padding:11px 14px;border-radius:8px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.toggle{display:flex;align-items:center;gap:10px;font-size:14px}
+.toggle input{width:20px;height:20px;accent-color:var(--accent)}
+h2{font-family:var(--display);font-weight:700;font-size:18px;letter-spacing:.04em;text-transform:uppercase;margin:0}
+details summary{cursor:pointer;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary h2::after{content:" +";color:var(--accent)}
+details[open] summary h2::after{content:" −"}
+.tbl{overflow-x:auto;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td{font-family:var(--mono);font-size:14px}
+th:first-child,td:first-child{text-align:left}
+tr.hit td{background:var(--warnbg)}
+tr.limit td{border-bottom:2px solid var(--bad)}
+.foot{font-size:12.5px;color:var(--muted);margin:0}
+.foot b{color:var(--ink)}
+#share-btn{order:2;margin-left:auto;font:600 13px/1 var(--body);background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;height:36px;padding:0 14px;cursor:pointer;white-space:nowrap}
+#share-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px}
+#share-box{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px;width:min(90vw,340px);display:flex;flex-direction:column;align-items:center;gap:14px}
+#share-box h2{font-size:20px;text-align:center}
+#share-box p{color:var(--muted);font-size:13px;text-align:center;margin:0}
+#share-box .qr{background:#fff;border-radius:12px;padding:10px;width:200px;height:200px}
+#share-box .qr img{width:100%;height:100%;display:block}
+#share-url-row{display:flex;gap:8px;width:100%}
+#share-url-input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--ink);font:12px var(--mono)}
+#share-copy-btn,#share-native{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:10px 14px;font:600 13px var(--body);cursor:pointer;white-space:nowrap}
+#share-native{width:100%;border-radius:12px;padding:13px 0;font-size:15px}
+#share-close{background:rgba(255,255,255,.1);color:var(--ink);border:0;border-radius:12px;padding:12px 0;font:600 15px var(--body);cursor:pointer;width:100%}
+[hidden]{display:none!important}
+.top h1{order:1}.top .seg{order:3}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Sling <span>Angle</span></h1>
+  <button id="share-btn" type="button">&#8599; Share</button>
+  <div class="seg" role="group" aria-label="Mode">
+    <button id="m-sling" aria-pressed="true">Sling</button>
+    <button id="m-edge" aria-pressed="false">Redirection</button>
+    <button id="m-track" aria-pressed="false">Deflection</button>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <video id="vid" playsinline muted autoplay></video>
+  <canvas id="cv" aria-label="Camera view with draggable measurement points"></canvas>
+  <div class="chips" id="chips"></div>
+  <div class="shutter" id="shutter" hidden>
+    <button class="fab" id="freeze">Freeze</button>
+  </div>
+  <div class="gate" id="gate">
+    <h2 style="font-size:22px">Live rig measurement</h2>
+    <p>Uses the rear camera and the tilt sensor. Nothing is recorded or uploaded.</p>
+    <button class="fab" id="start">Start camera</button>
+    <label class="btn" for="pick">Use a photo instead</label>
+    <input id="pick" type="file" accept="image/*" hidden>
+    <p class="err" id="gateErr" hidden></p>
+  </div>
+</div>
+
+<div class="sheet">
+  <p class="foot" id="modeHint"></p>
+  <div class="readout" id="readout"></div>
+  <div class="status info" id="status"></div>
+
+  <div class="panel">
+    <div class="row">
+      <label class="f" id="loadLbl">Rescue load (kg)<input type="number" id="load" min="0" step="any" inputmode="decimal"></label>
+      <div class="presets" id="presets"></div>
+    </div>
+    <label class="toggle"><input type="checkbox" id="tiltOn" checked> Correct for phone tilt (true vertical)</label>
+    <div class="row">
+      <label class="f" id="angLbl">Set internal angle<input type="number" id="angIn" min="0" max="178" step="1" inputmode="numeric" value="120"></label>
+      <button class="btn" id="angGo">Apply °</button>
+    </div>
+  </div>
+
+  <details class="panel">
+    <summary><h2 id="refTitle">Anchor angles</h2></summary>
+    <div class="tbl"><table id="ref"></table></div>
+    <p class="foot" id="refNote" style="margin-top:8px"></p>
+  </details>
+
+  <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Keep the tilt chip near 0° pitch: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
+</div>
+
+<div id="share-modal" hidden>
+  <div id="share-box" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <h2 id="share-title">Share Sling Angle</h2>
+    <p>Share the Sling Angle Finder with your crew</p>
+    <div class="qr"><img alt="QR code for the Sling Angle Finder link" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0nMS4wJyBlbmNvZGluZz0nVVRGLTgnPz4KPHN2ZyB3aWR0aD0iNDFtbSIgaGVpZ2h0PSI0MW1tIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCA0MSA0MSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBmaWxsPSJ3aGl0ZSIgeD0iMCIgeT0iMCIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIvPjxwYXRoIGQ9Ik0yLDJIM1YzSDJ6TTMsMkg0VjNIM3pNNCwySDVWM0g0ek01LDJINlYzSDV6TTYsMkg3VjNINnpNNywySDhWM0g3ek04LDJIOVYzSDh6TTExLDJIMTJWM0gxMXpNMTIsMkgxM1YzSDEyek0xMywySDE0VjNIMTN6TTE1LDJIMTZWM0gxNXpNMTYsMkgxN1YzSDE2ek0xNywySDE4VjNIMTd6TTE4LDJIMTlWM0gxOHpNMjAsMkgyMVYzSDIwek0yNCwySDI1VjNIMjR6TTI1LDJIMjZWM0gyNXpNMjYsMkgyN1YzSDI2ek0yOSwySDMwVjNIMjl6TTMwLDJIMzFWM0gzMHpNMzIsMkgzM1YzSDMyek0zMywySDM0VjNIMzN6TTM0LDJIMzVWM0gzNHpNMzUsMkgzNlYzSDM1ek0zNiwySDM3VjNIMzZ6TTM3LDJIMzhWM0gzN3pNMzgsMkgzOVYzSDM4ek0yLDNIM1Y0SDJ6TTgsM0g5VjRIOHpNMTEsM0gxMlY0SDExek0xMiwzSDEzVjRIMTJ6TTE1LDNIMTZWNEgxNXpNMTYsM0gxN1Y0SDE2ek0xNywzSDE4VjRIMTd6TTE4LDNIMTlWNEgxOHpNMTksM0gyMFY0SDE5ek0yMCwzSDIxVjRIMjB6TTI5LDNIMzBWNEgyOXpNMzAsM0gzMVY0SDMwek0zMiwzSDMzVjRIMzJ6TTM4LDNIMzlWNEgzOHpNMiw0SDNWNUgyek00LDRINVY1SDR6TTUsNEg2VjVINXpNNiw0SDdWNUg2ek04LDRIOVY1SDh6TTEwLDRIMTFWNUgxMHpNMTEsNEgxMlY1SDExek0xMyw0SDE0VjVIMTN6TTE0LDRIMTVWNUgxNHpNMTUsNEgxNlY1SDE1ek0xNiw0SDE3VjVIMTZ6TTE3LDRIMThWNUgxN3pNMTgsNEgxOVY1SDE4ek0yMCw0SDIxVjVIMjB6TTIyLDRIMjNWNUgyMnpNMjMsNEgyNFY1SDIzek0yNCw0SDI1VjVIMjR6TTMyLDRIMzNWNUgzMnpNMzQsNEgzNVY1SDM0ek0zNSw0SDM2VjVIMzV6TTM2LDRIMzdWNUgzNnpNMzgsNEgzOVY1SDM4ek0yLDVIM1Y2SDJ6TTQsNUg1VjZINHpNNSw1SDZWNkg1ek02LDVIN1Y2SDZ6TTgsNUg5VjZIOHpNMTAsNUgxMVY2SDEwek0xMyw1SDE0VjZIMTN6TTE1LDVIMTZWNkgxNXpNMTYsNUgxN1Y2SDE2ek0xOSw1SDIwVjZIMTl6TTIwLDVIMjFWNkgyMHpNMjEsNUgyMlY2SDIxek0yNCw1SDI1VjZIMjR6TTI2LDVIMjdWNkgyNnpNMjcsNUgyOFY2SDI3ek0yOCw1SDI5VjZIMjh6TTI5LDVIMzBWNkgyOXpNMzAsNUgzMVY2SDMwek0zMiw1SDMzVjZIMzJ6TTM0LDVIMzVWNkgzNHpNMzUsNUgzNlY2SDM1ek0zNiw1SDM3VjZIMzZ6TTM4LDVIMzlWNkgzOHpNMiw2SDNWN0gyek00LDZINVY3SDR6TTUsNkg2VjdINXpNNiw2SDdWN0g2ek04LDZIOVY3SDh6TTEwLDZIMTFWN0gxMHpNMTEsNkgxMlY3SDExek0xMiw2SDEzVjdIMTJ6TTEzLDZIMTRWN0gxM3pNMTQsNkgxNVY3SDE0ek0xNSw2SDE2VjdIMTV6TTE2LDZIMTdWN0gxNnpNMTksNkgyMFY3SDE5ek0yMCw2SDIxVjdIMjB6TTIxLDZIMjJWN0gyMXpNMjIsNkgyM1Y3SDIyek0yMyw2SDI0VjdIMjN6TTI1LDZIMjZWN0gyNXpNMjcsNkgyOFY3SDI3ek0zMCw2SDMxVjdIMzB6TTMyLDZIMzNWN0gzMnpNMzQsNkgzNVY3SDM0ek0zNSw2SDM2VjdIMzV6TTM2LDZIMzdWN0gzNnpNMzgsNkgzOVY3SDM4ek0yLDdIM1Y4SDJ6TTgsN0g5VjhIOHpNMTAsN0gxMVY4SDEwek0xMSw3SDEyVjhIMTF6TTEzLDdIMTRWOEgxM3pNMTQsN0gxNVY4SDE0ek0xNSw3SDE2VjhIMTV6TTE3LDdIMThWOEgxN3pNMTksN0gyMFY4SDE5ek0yMiw3SDIzVjhIMjJ6TTI2LDdIMjdWOEgyNnpNMjgsN0gyOVY4SDI4ek0yOSw3SDMwVjhIMjl6TTMwLDdIMzFWOEgzMHpNMzIsN0gzM1Y4SDMyek0zOCw3SDM5VjhIMzh6TTIsOEgzVjlIMnpNMyw4SDRWOUgzek00LDhINVY5SDR6TTUsOEg2VjlINXpNNiw4SDdWOUg2ek03LDhIOFY5SDd6TTgsOEg5VjlIOHpNMTAsOEgxMVY5SDEwek0xMiw4SDEzVjlIMTJ6TTE0LDhIMTVWOUgxNHpNMTYsOEgxN1Y5SDE2ek0xOCw4SDE5VjlIMTh6TTIwLDhIMjFWOUgyMHpNMjIsOEgyM1Y5SDIyek0yNCw4SDI1VjlIMjR6TTI2LDhIMjdWOUgyNnpNMjgsOEgyOVY5SDI4ek0zMCw4SDMxVjlIMzB6TTMyLDhIMzNWOUgzMnpNMzMsOEgzNFY5SDMzek0zNCw4SDM1VjlIMzR6TTM1LDhIMzZWOUgzNXpNMzYsOEgzN1Y5SDM2ek0zNyw4SDM4VjlIMzd6TTM4LDhIMzlWOUgzOHpNMTAsOUgxMVYxMEgxMHpNMTQsOUgxNVYxMEgxNHpNMTUsOUgxNlYxMEgxNXpNMTYsOUgxN1YxMEgxNnpNMTcsOUgxOFYxMEgxN3pNMTksOUgyMFYxMEgxOXpNMjAsOUgyMVYxMEgyMHpNMjIsOUgyM1YxMEgyMnpNMjMsOUgyNFYxMEgyM3pNMjQsOUgyNVYxMEgyNHpNMjUsOUgyNlYxMEgyNXpNMzAsOUgzMVYxMEgzMHpNMiwxMEgzVjExSDJ6TTQsMTBINVYxMUg0ek01LDEwSDZWMTFINXpNNiwxMEg3VjExSDZ6TTcsMTBIOFYxMUg3ek04LDEwSDlWMTFIOHpNMTQsMTBIMTVWMTFIMTR6TTE2LDEwSDE3VjExSDE2ek0xNywxMEgxOFYxMUgxN3pNMTgsMTBIMTlWMTFIMTh6TTI0LDEwSDI1VjExSDI0ek0yNSwxMEgyNlYxMUgyNXpNMjgsMTBIMjlWMTFIMjh6TTMwLDEwSDMxVjExSDMwek0zMiwxMEgzM1YxMUgzMnpNMzMsMTBIMzRWMTFIMzN6TTM0LDEwSDM1VjExSDM0ek0zNSwxMEgzNlYxMUgzNXpNMzYsMTBIMzdWMTFIMzZ6TTQsMTFINVYxMkg0ek01LDExSDZWMTJINXpNMTEsMTFIMTJWMTJIMTF6TTE0LDExSDE1VjEySDE0ek0xNSwxMUgxNlYxMkgxNXpNMTYsMTFIMTdWMTJIMTZ6TTE3LDExSDE4VjEySDE3ek0xOSwxMUgyMFYxMkgxOXpNMjAsMTFIMjFWMTJIMjB6TTIxLDExSDIyVjEySDIxek0yMiwxMUgyM1YxMkgyMnpNMjUsMTFIMjZWMTJIMjV6TTI2LDExSDI3VjEySDI2ek0yNywxMUgyOFYxMkgyN3pNMjksMTFIMzBWMTJIMjl6TTMwLDExSDMxVjEySDMwek0zMywxMUgzNFYxMkgzM3pNMzUsMTFIMzZWMTJIMzV6TTM3LDExSDM4VjEySDM3ek0zLDEySDRWMTNIM3pNNiwxMkg3VjEzSDZ6TTcsMTJIOFYxM0g3ek04LDEySDlWMTNIOHpNMTAsMTJIMTFWMTNIMTB6TTEyLDEySDEzVjEzSDEyek0xMywxMkgxNFYxM0gxM3pNMTQsMTJIMTVWMTNIMTR6TTE1LDEySDE2VjEzSDE1ek0xNiwxMkgxN1YxM0gxNnpNMTcsMTJIMThWMTNIMTd6TTE4LDEySDE5VjEzSDE4ek0xOSwxMkgyMFYxM0gxOXpNMjIsMTJIMjNWMTNIMjJ6TTIzLDEySDI0VjEzSDIzek0yNiwxMkgyN1YxM0gyNnpNMjksMTJIMzBWMTNIMjl6TTMwLDEySDMxVjEzSDMwek0zMiwxMkgzM1YxM0gzMnpNMzQsMTJIMzVWMTNIMzR6TTM3LDEySDM4VjEzSDM3ek0zOCwxMkgzOVYxM0gzOHpNNSwxM0g2VjE0SDV6TTYsMTNIN1YxNEg2ek03LDEzSDhWMTRIN3pNOSwxM0gxMFYxNEg5ek0xMiwxM0gxM1YxNEgxMnpNMTQsMTNIMTVWMTRIMTR6TTE2LDEzSDE3VjE0SDE2ek0xNywxM0gxOFYxNEgxN3pNMjAsMTNIMjFWMTRIMjB6TTIyLDEzSDIzVjE0SDIyek0yMywxM0gyNFYxNEgyM3pNMjQsMTNIMjVWMTRIMjR6TTI1LDEzSDI2VjE0SDI1ek0zMCwxM0gzMVYxNEgzMHpNMzEsMTNIMzJWMTRIMzF6TTMzLDEzSDM0VjE0SDMzek0zOCwxM0gzOVYxNEgzOHpNMiwxNEgzVjE1SDJ6TTQsMTRINVYxNUg0ek01LDE0SDZWMTVINXpNOCwxNEg5VjE1SDh6TTEwLDE0SDExVjE1SDEwek0xNCwxNEgxNVYxNUgxNHpNMTUsMTRIMTZWMTVIMTV6TTE2LDE0SDE3VjE1SDE2ek0xNywxNEgxOFYxNUgxN3pNMTksMTRIMjBWMTVIMTl6TTIxLDE0SDIyVjE1SDIxek0yMiwxNEgyM1YxNUgyMnpNMjQsMTRIMjVWMTVIMjR6TTI2LDE0SDI3VjE1SDI2ek0yNywxNEgyOFYxNUgyN3pNMjgsMTRIMjlWMTVIMjh6TTMxLDE0SDMyVjE1SDMxek0zMiwxNEgzM1YxNUgzMnpNMzQsMTRIMzVWMTVIMzR6TTM1LDE0SDM2VjE1SDM1ek0zNiwxNEgzN1YxNUgzNnpNMzcsMTRIMzhWMTVIMzd6TTM4LDE0SDM5VjE1SDM4ek0yLDE1SDNWMTZIMnpNNCwxNUg1VjE2SDR6TTYsMTVIN1YxNkg2ek05LDE1SDEwVjE2SDl6TTExLDE1SDEyVjE2SDExek0xMiwxNUgxM1YxNkgxMnpNMTgsMTVIMTlWMTZIMTh6TTIwLDE1SDIxVjE2SDIwek0yMSwxNUgyMlYxNkgyMXpNMjIsMTVIMjNWMTZIMjJ6TTIzLDE1SDI0VjE2SDIzek0yNSwxNUgyNlYxNkgyNXpNMjcsMTVIMjhWMTZIMjd6TTMwLDE1SDMxVjE2SDMwek0zMywxNUgzNFYxNkgzM3pNNiwxNkg3VjE3SDZ6TTcsMTZIOFYxN0g3ek04LDE2SDlWMTdIOHpNOSwxNkgxMFYxN0g5ek0xMSwxNkgxMlYxN0gxMXpNMTcsMTZIMThWMTdIMTd6TTE4LDE2SDE5VjE3SDE4ek0yMCwxNkgyMVYxN0gyMHpNMjksMTZIMzBWMTdIMjl6TTMzLDE2SDM0VjE3SDMzek0zNCwxNkgzNVYxN0gzNHpNMzUsMTZIMzZWMTdIMzV6TTM3LDE2SDM4VjE3SDM3ek0zOCwxNkgzOVYxN0gzOHpNMywxN0g0VjE4SDN6TTcsMTdIOFYxOEg3ek0xMSwxN0gxMlYxOEgxMXpNMTUsMTdIMTZWMThIMTV6TTE2LDE3SDE3VjE4SDE2ek0xNywxN0gxOFYxOEgxN3pNMjMsMTdIMjRWMThIMjN6TTI2LDE3SDI3VjE4SDI2ek0yOCwxN0gyOVYxOEgyOHpNMjksMTdIMzBWMThIMjl6TTMwLDE3SDMxVjE4SDMwek0zMSwxN0gzMlYxOEgzMXpNMzIsMTdIMzNWMThIMzJ6TTMzLDE3SDM0VjE4SDMzek0zNCwxN0gzNVYxOEgzNHpNMzcsMTdIMzhWMThIMzd6TTM4LDE3SDM5VjE4SDM4ek0zLDE4SDRWMTlIM3pNNCwxOEg1VjE5SDR6TTUsMThINlYxOUg1ek02LDE4SDdWMTlINnpNNywxOEg4VjE5SDd6TTgsMThIOVYxOUg4ek05LDE4SDEwVjE5SDl6TTEwLDE4SDExVjE5SDEwek0xMSwxOEgxMlYxOUgxMXpNMTQsMThIMTVWMTlIMTR6TTIwLDE4SDIxVjE5SDIwek0yMSwxOEgyMlYxOUgyMXpNMjYsMThIMjdWMTlIMjZ6TTI4LDE4SDI5VjE5SDI4ek0yOSwxOEgzMFYxOUgyOXpNMzEsMThIMzJWMTlIMzF6TTMyLDE4SDMzVjE5SDMyek0zNCwxOEgzNVYxOUgzNHpNMzYsMThIMzdWMTlIMzZ6TTM3LDE4SDM4VjE5SDM3ek0zLDE5SDRWMjBIM3pNNywxOUg4VjIwSDd6TTEyLDE5SDEzVjIwSDEyek0xMywxOUgxNFYyMEgxM3pNMTQsMTlIMTVWMjBIMTR6TTE1LDE5SDE2VjIwSDE1ek0xNywxOUgxOFYyMEgxN3pNMTgsMTlIMTlWMjBIMTh6TTE5LDE5SDIwVjIwSDE5ek0yMSwxOUgyMlYyMEgyMXpNMjIsMTlIMjNWMjBIMjJ6TTI0LDE5SDI1VjIwSDI0ek0yNSwxOUgyNlYyMEgyNXpNMzMsMTlIMzRWMjBIMzN6TTM2LDE5SDM3VjIwSDM2ek0zNywxOUgzOFYyMEgzN3pNNCwyMEg1VjIxSDR6TTUsMjBINlYyMUg1ek02LDIwSDdWMjFINnpNOCwyMEg5VjIxSDh6TTksMjBIMTBWMjFIOXpNMTAsMjBIMTFWMjFIMTB6TTExLDIwSDEyVjIxSDExek0xMywyMEgxNFYyMUgxM3pNMjAsMjBIMjFWMjFIMjB6TTI0LDIwSDI1VjIxSDI0ek0yOCwyMEgyOVYyMUgyOHpNMjksMjBIMzBWMjFIMjl6TTMzLDIwSDM0VjIxSDMzek0zNSwyMEgzNlYyMUgzNXpNMzYsMjBIMzdWMjFIMzZ6TTM3LDIwSDM4VjIxSDM3ek0zOCwyMEgzOVYyMUgzOHpNNywyMUg4VjIySDd6TTksMjFIMTBWMjJIOXpNMTIsMjFIMTNWMjJIMTJ6TTE0LDIxSDE1VjIySDE0ek0xNiwyMUgxN1YyMkgxNnpNMTgsMjFIMTlWMjJIMTh6TTIyLDIxSDIzVjIySDIyek0yMywyMUgyNFYyMkgyM3pNMjUsMjFIMjZWMjJIMjV6TTI2LDIxSDI3VjIySDI2ek0yOCwyMUgyOVYyMkgyOHpNMzIsMjFIMzNWMjJIMzJ6TTMzLDIxSDM0VjIySDMzek0zNCwyMUgzNVYyMkgzNHpNMzgsMjFIMzlWMjJIMzh6TTQsMjJINVYyM0g0ek01LDIySDZWMjNINXpNNiwyMkg3VjIzSDZ6TTcsMjJIOFYyM0g3ek04LDIySDlWMjNIOHpNOSwyMkgxMFYyM0g5ek0xMCwyMkgxMVYyM0gxMHpNMTEsMjJIMTJWMjNIMTF6TTEzLDIySDE0VjIzSDEzek0xNiwyMkgxN1YyM0gxNnpNMTksMjJIMjBWMjNIMTl6TTI2LDIySDI3VjIzSDI2ek0yNywyMkgyOFYyM0gyN3pNMjgsMjJIMjlWMjNIMjh6TTI5LDIySDMwVjIzSDI5ek0zMCwyMkgzMVYyM0gzMHpNMzEsMjJIMzJWMjNIMzF6TTMyLDIySDMzVjIzSDMyek0zNCwyMkgzNVYyM0gzNHpNMzUsMjJIMzZWMjNIMzV6TTM2LDIySDM3VjIzSDM2ek00LDIzSDVWMjRINHpNNSwyM0g2VjI0SDV6TTcsMjNIOFYyNEg3ek0xNCwyM0gxNVYyNEgxNHpNMTUsMjNIMTZWMjRIMTV6TTE2LDIzSDE3VjI0SDE2ek0xOCwyM0gxOVYyNEgxOHpNMTksMjNIMjBWMjRIMTl6TTIwLDIzSDIxVjI0SDIwek0yMSwyM0gyMlYyNEgyMXpNMjIsMjNIMjNWMjRIMjJ6TTI1LDIzSDI2VjI0SDI1ek0yNywyM0gyOFYyNEgyN3pNMjgsMjNIMjlWMjRIMjh6TTMwLDIzSDMxVjI0SDMwek0zMSwyM0gzMlYyNEgzMXpNMzUsMjNIMzZWMjRIMzV6TTQsMjRINVYyNUg0ek04LDI0SDlWMjVIOHpNOSwyNEgxMFYyNUg5ek0xMSwyNEgxMlYyNUgxMXpNMTMsMjRIMTRWMjVIMTN6TTE3LDI0SDE4VjI1SDE3ek0xOSwyNEgyMFYyNUgxOXpNMjMsMjRIMjRWMjVIMjN6TTI2LDI0SDI3VjI1SDI2ek0yNywyNEgyOFYyNUgyN3pNMjgsMjRIMjlWMjVIMjh6TTI5LDI0SDMwVjI1SDI5ek0zMCwyNEgzMVYyNUgzMHpNMzEsMjRIMzJWMjVIMzF6TTMzLDI0SDM0VjI1SDMzek0zNCwyNEgzNVYyNUgzNHpNMzUsMjRIMzZWMjVIMzV6TTM4LDI0SDM5VjI1SDM4ek0yLDI1SDNWMjZIMnpNMywyNUg0VjI2SDN6TTUsMjVINlYyNkg1ek02LDI1SDdWMjZINnpNOSwyNUgxMFYyNkg5ek0xMSwyNUgxMlYyNkgxMXpNMTUsMjVIMTZWMjZIMTV6TTE2LDI1SDE3VjI2SDE2ek0xNywyNUgxOFYyNkgxN3pNMTgsMjVIMTlWMjZIMTh6TTE5LDI1SDIwVjI2SDE5ek0yMCwyNUgyMVYyNkgyMHpNMjIsMjVIMjNWMjZIMjJ6TTIzLDI1SDI0VjI2SDIzek0yNCwyNUgyNVYyNkgyNHpNMjUsMjVIMjZWMjZIMjV6TTI2LDI1SDI3VjI2SDI2ek0zMywyNUgzNFYyNkgzM3pNMzQsMjVIMzVWMjZIMzR6TTM3LDI1SDM4VjI2SDM3ek0yLDI2SDNWMjdIMnpNMywyNkg0VjI3SDN6TTcsMjZIOFYyN0g3ek04LDI2SDlWMjdIOHpNOSwyNkgxMFYyN0g5ek0xMCwyNkgxMVYyN0gxMHpNMTIsMjZIMTNWMjdIMTJ6TTE4LDI2SDE5VjI3SDE4ek0yMiwyNkgyM1YyN0gyMnpNMjYsMjZIMjdWMjdIMjZ6TTI4LDI2SDI5VjI3SDI4ek0yOSwyNkgzMFYyN0gyOXpNMzAsMjZIMzFWMjdIMzB6TTMxLDI2SDMyVjI3SDMxek0zMiwyNkgzM1YyN0gzMnpNMzQsMjZIMzVWMjdIMzR6TTM2LDI2SDM3VjI3SDM2ek0zNywyNkgzOFYyN0gzN3pNMzgsMjZIMzlWMjdIMzh6TTIsMjdIM1YyOEgyek01LDI3SDZWMjhINXpNNiwyN0g3VjI4SDZ6TTcsMjdIOFYyOEg3ek05LDI3SDEwVjI4SDl6TTExLDI3SDEyVjI4SDExek0xNCwyN0gxNVYyOEgxNHpNMTUsMjdIMTZWMjhIMTV6TTE3LDI3SDE4VjI4SDE3ek0xOSwyN0gyMFYyOEgxOXpNMjAsMjdIMjFWMjhIMjB6TTIxLDI3SDIyVjI4SDIxek0yMiwyN0gyM1YyOEgyMnpNMjQsMjdIMjVWMjhIMjR6TTI1LDI3SDI2VjI4SDI1ek0zMCwyN0gzMVYyOEgzMHpNMiwyOEgzVjI5SDJ6TTYsMjhIN1YyOUg2ek04LDI4SDlWMjlIOHpNOSwyOEgxMFYyOUg5ek0xMCwyOEgxMVYyOUgxMHpNMTUsMjhIMTZWMjlIMTV6TTE3LDI4SDE4VjI5SDE3ek0xOCwyOEgxOVYyOUgxOHpNMTksMjhIMjBWMjlIMTl6TTI0LDI4SDI1VjI5SDI0ek0yNywyOEgyOFYyOUgyN3pNMjksMjhIMzBWMjlIMjl6TTMwLDI4SDMxVjI5SDMwek0zMiwyOEgzM1YyOUgzMnpNMzMsMjhIMzRWMjlIMzN6TTM2LDI4SDM3VjI5SDM2ek0zNywyOEgzOFYyOUgzN3pNMzgsMjhIMzlWMjlIMzh6TTIsMjlIM1YzMEgyek01LDI5SDZWMzBINXpNNywyOUg4VjMwSDd6TTksMjlIMTBWMzBIOXpNMTAsMjlIMTFWMzBIMTB6TTE3LDI5SDE4VjMwSDE3ek0yMywyOUgyNFYzMEgyM3pNMjUsMjlIMjZWMzBIMjV6TTI2LDI5SDI3VjMwSDI2ek0yOSwyOUgzMFYzMEgyOXpNMzAsMjlIMzFWMzBIMzB6TTMzLDI5SDM0VjMwSDMzek0zOCwyOUgzOVYzMEgzOHpNMiwzMEgzVjMxSDJ6TTQsMzBINVYzMUg0ek02LDMwSDdWMzFINnpNNywzMEg4VjMxSDd6TTgsMzBIOVYzMUg4ek05LDMwSDEwVjMxSDl6TTEwLDMwSDExVjMxSDEwek0xMywzMEgxNFYzMUgxM3pNMTcsMzBIMThWMzFIMTd6TTE5LDMwSDIwVjMxSDE5ek0yMCwzMEgyMVYzMUgyMHpNMjEsMzBIMjJWMzFIMjF6TTIyLDMwSDIzVjMxSDIyek0yNCwzMEgyNVYzMUgyNHpNMjcsMzBIMjhWMzFIMjd6TTI4LDMwSDI5VjMxSDI4ek0yOSwzMEgzMFYzMUgyOXpNMzAsMzBIMzFWMzFIMzB6TTMxLDMwSDMyVjMxSDMxek0zMiwzMEgzM1YzMUgzMnpNMzMsMzBIMzRWMzFIMzN6TTM0LDMwSDM1VjMxSDM0ek0zNSwzMEgzNlYzMUgzNXpNMzYsMzBIMzdWMzFIMzZ6TTM3LDMwSDM4VjMxSDM3ek0xMCwzMUgxMVYzMkgxMHpNMTEsMzFIMTJWMzJIMTF6TTEzLDMxSDE0VjMySDEzek0xNiwzMUgxN1YzMkgxNnpNMTgsMzFIMTlWMzJIMTh6TTIwLDMxSDIxVjMySDIwek0yMSwzMUgyMlYzMkgyMXpNMjIsMzFIMjNWMzJIMjJ6TTIzLDMxSDI0VjMySDIzek0yNSwzMUgyNlYzMkgyNXpNMzAsMzFIMzFWMzJIMzB6TTM0LDMxSDM1VjMySDM0ek0zNSwzMUgzNlYzMkgzNXpNMiwzMkgzVjMzSDJ6TTMsMzJINFYzM0gzek00LDMySDVWMzNINHpNNSwzMkg2VjMzSDV6TTYsMzJIN1YzM0g2ek03LDMySDhWMzNIN3pNOCwzMkg5VjMzSDh6TTExLDMySDEyVjMzSDExek0xMywzMkgxNFYzM0gxM3pNMTQsMzJIMTVWMzNIMTR6TTE2LDMySDE3VjMzSDE2ek0xNywzMkgxOFYzM0gxN3pNMTgsMzJIMTlWMzNIMTh6TTIwLDMySDIxVjMzSDIwek0yMiwzMkgyM1YzM0gyMnpNMjQsMzJIMjVWMzNIMjR6TTI3LDMySDI4VjMzSDI3ek0yOCwzMkgyOVYzM0gyOHpNMzAsMzJIMzFWMzNIMzB6TTMyLDMySDMzVjMzSDMyek0zNCwzMkgzNVYzM0gzNHpNMzYsMzJIMzdWMzNIMzZ6TTM3LDMySDM4VjMzSDM3ek0zOCwzMkgzOVYzM0gzOHpNMiwzM0gzVjM0SDJ6TTgsMzNIOVYzNEg4ek0xMCwzM0gxMVYzNEgxMHpNMTEsMzNIMTJWMzRIMTF6TTEyLDMzSDEzVjM0SDEyek0xMywzM0gxNFYzNEgxM3pNMjMsMzNIMjRWMzRIMjN6TTI1LDMzSDI2VjM0SDI1ek0yOCwzM0gyOVYzNEgyOHpNMzAsMzNIMzFWMzRIMzB6TTM0LDMzSDM1VjM0SDM0ek0zNSwzM0gzNlYzNEgzNXpNMiwzNEgzVjM1SDJ6TTQsMzRINVYzNUg0ek01LDM0SDZWMzVINXpNNiwzNEg3VjM1SDZ6TTgsMzRIOVYzNUg4ek0xMCwzNEgxMVYzNUgxMHpNMTEsMzRIMTJWMzVIMTF6TTEzLDM0SDE0VjM1SDEzek0xNCwzNEgxNVYzNUgxNHpNMTcsMzRIMThWMzVIMTd6TTIwLDM0SDIxVjM1SDIwek0yMSwzNEgyMlYzNUgyMXpNMjgsMzRIMjlWMzVIMjh6TTI5LDM0SDMwVjM1SDI5ek0zMCwzNEgzMVYzNUgzMHpNMzEsMzRIMzJWMzVIMzF6TTMyLDM0SDMzVjM1SDMyek0zMywzNEgzNFYzNUgzM3pNMzQsMzRIMzVWMzVIMzR6TTM2LDM0SDM3VjM1SDM2ek0zNywzNEgzOFYzNUgzN3pNMiwzNUgzVjM2SDJ6TTQsMzVINVYzNkg0ek01LDM1SDZWMzZINXpNNiwzNUg3VjM2SDZ6TTgsMzVIOVYzNkg4ek0xMCwzNUgxMVYzNkgxMHpNMTQsMzVIMTVWMzZIMTR6TTE1LDM1SDE2VjM2SDE1ek0xNywzNUgxOFYzNkgxN3pNMTgsMzVIMTlWMzZIMTh6TTE5LDM1SDIwVjM2SDE5ek0yMSwzNUgyMlYzNkgyMXpNMjIsMzVIMjNWMzZIMjJ6TTIzLDM1SDI0VjM2SDIzek0yNSwzNUgyNlYzNkgyNXpNMjYsMzVIMjdWMzZIMjZ6TTI4LDM1SDI5VjM2SDI4ek0zMSwzNUgzMlYzNkgzMXpNMzIsMzVIMzNWMzZIMzJ6TTM0LDM1SDM1VjM2SDM0ek0zNiwzNUgzN1YzNkgzNnpNMzgsMzVIMzlWMzZIMzh6TTIsMzZIM1YzN0gyek00LDM2SDVWMzdINHpNNSwzNkg2VjM3SDV6TTYsMzZIN1YzN0g2ek04LDM2SDlWMzdIOHpNMTAsMzZIMTFWMzdIMTB6TTExLDM2SDEyVjM3SDExek0xMywzNkgxNFYzN0gxM3pNMTksMzZIMjBWMzdIMTl6TTI0LDM2SDI1VjM3SDI0ek0yNywzNkgyOFYzN0gyN3pNMjksMzZIMzBWMzdIMjl6TTMwLDM2SDMxVjM3SDMwek0zNSwzNkgzNlYzN0gzNXpNMzcsMzZIMzhWMzdIMzd6TTM4LDM2SDM5VjM3SDM4ek0yLDM3SDNWMzhIMnpNOCwzN0g5VjM4SDh6TTExLDM3SDEyVjM4SDExek0xMiwzN0gxM1YzOEgxMnpNMTMsMzdIMTRWMzhIMTN6TTE0LDM3SDE1VjM4SDE0ek0xNSwzN0gxNlYzOEgxNXpNMTYsMzdIMTdWMzhIMTZ6TTE4LDM3SDE5VjM4SDE4ek0yMSwzN0gyMlYzOEgyMXpNMjIsMzdIMjNWMzhIMjJ6TTIzLDM3SDI0VjM4SDIzek0yNCwzN0gyNVYzOEgyNHpNMjUsMzdIMjZWMzhIMjV6TTI5LDM3SDMwVjM4SDI5ek0zMCwzN0gzMVYzOEgzMHpNMzEsMzdIMzJWMzhIMzF6TTMyLDM3SDMzVjM4SDMyek0zNCwzN0gzNVYzOEgzNHpNMzgsMzdIMzlWMzhIMzh6TTIsMzhIM1YzOUgyek0zLDM4SDRWMzlIM3pNNCwzOEg1VjM5SDR6TTUsMzhINlYzOUg1ek02LDM4SDdWMzlINnpNNywzOEg4VjM5SDd6TTgsMzhIOVYzOUg4ek0xMCwzOEgxMVYzOUgxMHpNMTEsMzhIMTJWMzlIMTF6TTEyLDM4SDEzVjM5SDEyek0xMywzOEgxNFYzOUgxM3pNMTgsMzhIMTlWMzlIMTh6TTE5LDM4SDIwVjM5SDE5ek0yMSwzOEgyMlYzOUgyMXpNMjQsMzhIMjVWMzlIMjR6TTI1LDM4SDI2VjM5SDI1ek0yNiwzOEgyN1YzOUgyNnpNMjcsMzhIMjhWMzlIMjd6TTI4LDM4SDI5VjM5SDI4ek0zMiwzOEgzM1YzOUgzMnpNMzQsMzhIMzVWMzlIMzR6TTM1LDM4SDM2VjM5SDM1ek0zNiwzOEgzN1YzOUgzNnpNMzcsMzhIMzhWMzlIMzd6TTM4LDM4SDM5VjM5SDM4eiIgaWQ9InFyLXBhdGgiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMSIgZmlsbC1ydWxlPSJub256ZXJvIiBzdHJva2U9Im5vbmUiLz48L3N2Zz4="></div>
+    <div id="share-url-row">
+      <input id="share-url-input" readonly aria-label="App link">
+      <button id="share-copy-btn" type="button">Copy</button>
+    </div>
+    <button id="share-native" type="button">&#8599; Share link</button>
+    <button id="share-close" type="button">Close</button>
+  </div>
+</div>
+
+<script>
+(()=>{
+const G=0.00980665, $=id=>document.getElementById(id);
+const stage=$('stage'),vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
+const S={mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
+  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}},
+  tiltOn:true,sensor:false,up:null,pitch:null,frozenUp:null,frozenPitch:null};
+try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode;if(s.tiltOn===false)S.tiltOn=false}catch(e){}
+const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode,tiltOn:S.tiltOn}))}catch(e){}};
+
+let CW=0,CH=0,drag=null;
+function size(){const r=stage.getBoundingClientRect(),d=window.devicePixelRatio||1;CW=r.width;CH=r.height;
+  cv.width=Math.round(CW*d);cv.height=Math.round(CH*d);ctx.setTransform(d,0,0,d,0,0)}
+const px=p=>[p[0]*CW,p[1]*CH];
+
+/* ---------- tilt sensor ---------- */
+let sgn=0,fx=0,fy=0,fz=0,lastMotion=0;
+function onMotion(e){const g=e.accelerationIncludingGravity;if(!g||g.x==null)return;
+  const a=((screen.orientation&&screen.orientation.angle)??window.orientation??0)*Math.PI/180;
+  const rx=g.x*Math.cos(a)-g.y*Math.sin(a), ry=g.x*Math.sin(a)+g.y*Math.cos(a);
+  const k=0.15;fx+= (rx-fx)*k;fy+=(ry-fy)*k;fz+=((g.z||0)-fz)*k;lastMotion=performance.now();
+  if(!sgn&&Math.abs(fy)>6)sgn=Math.sign(fy);
+  if(sgn){const ux=sgn*fx,uy=sgn*fy,l=Math.hypot(ux,uy);if(l>2){S.up=[ux/l,uy/l];S.pitch=Math.atan2(Math.abs(fz),l)*180/Math.PI;S.sensor=true}}
+}
+async function startSensors(){
+  try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+    const r=await DeviceMotionEvent.requestPermission();if(r!=='granted')return}}catch(e){return}
+  window.addEventListener('devicemotion',onMotion);
+}
+
+/* ---------- camera ---------- */
+async function startCam(){
+  $('gateErr').hidden=true;
+  await startSensors();
+  if(!navigator.mediaDevices?.getUserMedia){gateErr(location.protocol==='https:'?'This browser has no camera access.':'Camera needs HTTPS. Host this file on GitHub Pages or Netlify, then open that link.');return}
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    vid.srcObject=st;await vid.play();S.live=true;S.frozen=null;S.fit='cover';vid.hidden=false;
+    $('gate').hidden=true;$('shutter').hidden=false;setFreezeBtn();
+    try{await navigator.wakeLock?.request('screen')}catch(e){}
+  }catch(err){gateErr(err.name==='NotAllowedError'?'Camera permission was refused. Allow camera for this site in your browser settings, then reload.':'Could not start the camera: '+err.message)}
+}
+function gateErr(m){const e=$('gateErr');e.textContent=m;e.hidden=false}
+function freeze(){
+  if(S.frozen&&S.live){S.frozen=null;S.frozenUp=null;vid.hidden=false;vid.play();setFreezeBtn();return}
+  if(!vid.videoWidth)return;
+  const c=document.createElement('canvas');c.width=vid.videoWidth;c.height=vid.videoHeight;c.getContext('2d').drawImage(vid,0,0);
+  S.frozen=c;S.fit='cover';S.frozenUp=S.up?[...S.up]:null;S.frozenPitch=S.pitch;vid.pause();vid.hidden=true;setFreezeBtn();
+}
+function setFreezeBtn(){const b=$('freeze');b.textContent=S.frozen?'Back to live':'Freeze';b.className=S.frozen?'fab ghost':'fab'}
+$('start').onclick=startCam;$('freeze').onclick=freeze;
+$('pick').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image();
+  im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
+    S.frozen=c;S.fit='contain';S.frozenUp=null;S.frozenPitch=null;S.live=false;$('gate').hidden=true;$('shutter').hidden=true;vid.hidden=true};
+  im.src=URL.createObjectURL(f)};
+
+/* ---------- geometry ---------- */
+function curUp(){if(!S.tiltOn)return null;if(S.frozen)return S.frozenUp;return S.up}
+function curPitch(){return S.frozen?S.frozenPitch:S.pitch}
+function compute(){
+  const p=S.pts[S.mode],[Px,Py]=px(p.P),[Ax,Ay]=px(p.A),[Bx,By]=px(p.B);
+  let ax=Ax-Px,ay=-(Ay-Py),bx=Bx-Px,by=-(By-Py);const la=Math.hypot(ax,ay)||1,lb=Math.hypot(bx,by)||1;ax/=la;ay/=la;bx/=lb;by/=lb;
+  const th=Math.acos(Math.max(-1,Math.min(1,ax*bx+ay*by)))*180/Math.PI;
+  const up=curUp(),Wn=S.load[S.mode]*G;
+  if(S.mode==='edge'){const R=2*Wn*Math.cos(th*Math.PI/360);return {ax,ay,bx,by,th,Wn,R,up}}
+  const rot=v=>up?[v[0]*up[1]-v[1]*up[0],v[0]*up[0]+v[1]*up[1]]:v;
+  let qa=rot([ax,ay]),qb=rot([bx,by]);
+  if(S.mode==='track'){const den=qa[1]+qb[1],valid=den>0.01,T=valid?Wn/den:NaN;return {ax,ay,bx,by,th,Wn,T,valid,ratio:T/Wn,up}}
+  const D=qa[0]*qb[1]-qb[0]*qa[1];let TA=NaN,TB=NaN,valid=Math.abs(D)>1e-6;
+  if(valid){TA=-Wn*qb[0]/D;TB=Wn*qa[0]/D;valid=TA>=0&&TB>=0}
+  return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN,up};
+}
+const kg=v=>isFinite(v)?Math.round(v/G).toLocaleString():'—';
+const kn=v=>isFinite(v)?v.toFixed(2)+' kN':'';
+
+/* ---------- draw ---------- */
+function imgRect(){const c=S.frozen;const s=S.fit==='cover'?Math.max(CW/c.width,CH/c.height):Math.min(CW/c.width,CH/c.height);
+  const w=c.width*s,h=c.height*s;return {x:(CW-w)/2,y:(CH-h)/2,s}}
+function frame(){
+  ctx.clearRect(0,0,CW,CH);
+  if(S.frozen){const r=imgRect();ctx.fillStyle='#000';ctx.fillRect(0,0,CW,CH);ctx.drawImage(S.frozen,r.x,r.y,S.frozen.width*r.s,S.frozen.height*r.s)}
+  if(!S.live&&!S.frozen){requestAnimationFrame(frame);return}
+  const r=compute(),p=S.pts[S.mode],P=px(p.P),A=px(p.A),B=px(p.B),C=null,rope='#f26a2e';
+  ctx.lineCap='round';
+  if(r.up){const [ux,uy]=r.up;ctx.setLineDash([6,6]);ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();
+    ctx.moveTo(P[0]+ux*300,P[1]-uy*300);ctx.lineTo(P[0]-ux*300,P[1]+uy*300);ctx.stroke();ctx.setLineDash([])}
+  for(const Q of [A,B]){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ln(P,Q);ctx.strokeStyle=rope;ctx.lineWidth=4;ln(P,Q)}
+  if(C){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=6;ln(P,C);ctx.strokeStyle='#4c8dff';ctx.lineWidth=3;ln(P,C)}
+  const a1=Math.atan2(-r.ay,r.ax),a2=Math.atan2(-r.by,r.bx);let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
+  let S0=a1;ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
+  const mid=S0+d/2;label(P[0]+Math.cos(mid)*60,P[1]+Math.sin(mid)*60,r.th.toFixed(0)+'°',true);
+  const near=(Q,t)=>{const dx=Q[0]-P[0],dy=Q[1]-P[1],l=Math.hypot(dx,dy)||1;label(Q[0]+dx/l*40,Q[1]+dy/l*40,t)};
+  if(S.mode!=='edge'){const dn=r.up?[-r.up[0],r.up[1]]:[0,1];arrow(P,[P[0]+dn[0]*62,P[1]+dn[1]*62],'#e6edf4',kg(r.Wn)+' kg');
+    if(r.valid){if(S.mode==='sling'){near(A,kg(r.TA)+' kg');near(B,kg(r.TB)+' kg')}else{near(A,kg(r.T)+' kg');near(B,kg(r.T)+' kg')}}}
+  else{near(B,kg(r.Wn)+' kg');let ux=r.ax+r.bx,uy=-(r.ay+r.by);const l=Math.hypot(ux,uy);if(l>1e-3)arrow(P,[P[0]-ux/l*70,P[1]-uy/l*70],'#ff6b6b',kg(r.R)+' kg')}
+  for(const [k,Q] of [['A',A],['B',B],...(C?[['C',C]]:[]),['P',P]]){ctx.fillStyle=k==='P'?rope:k==='C'?'#2f6fe0':'#132030';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(Q[0],Q[1],14,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='700 13px '+getComputedStyle(document.body).getPropertyValue('--mono');
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(k==='P'?(S.mode==='edge'?'E':'L'):k,Q[0],Q[1]+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
+  if(drag)loupe(px(S.pts[S.mode][drag]));
+  render(r);chips();
+  requestAnimationFrame(frame);
+}
+function ln(a,b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
+function label(x,y,t,big){ctx.font=(big?'700 16px ':'700 12px ')+'JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12,h=big?24:20;
+  x=Math.max(w/2+2,Math.min(CW-w/2-2,x));y=Math.max(h/2+2,Math.min(CH-h/2-2,y));
+  ctx.fillStyle='rgba(15,23,32,.88)';ctx.beginPath();ctx.roundRect?ctx.roundRect(x-w/2,y-h/2,w,h,5):ctx.rect(x-w/2,y-h/2,w,h);ctx.fill();
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,x,y+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
+function arrow(a,b,c,t){const ang=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.strokeStyle='#000';ctx.lineWidth=6;ln(a,b);ctx.strokeStyle=c;ctx.fillStyle=c;ctx.lineWidth=3;ln(a,b);
+  ctx.beginPath();ctx.moveTo(b[0]+Math.cos(ang)*8,b[1]+Math.sin(ang)*8);ctx.lineTo(b[0]+Math.cos(ang+2.5)*12,b[1]+Math.sin(ang+2.5)*12);ctx.lineTo(b[0]+Math.cos(ang-2.5)*12,b[1]+Math.sin(ang-2.5)*12);ctx.fill();
+  label(b[0]+Math.cos(ang)*24,b[1]+Math.sin(ang)*24,t)}
+function loupe(Q){const R=54,Z=3,cx=Q[0]<CW/2?CW-R-12:R+12,cy=R+44;
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.clip();ctx.fillStyle='#000';ctx.fillRect(cx-R,cy-R,2*R,2*R);
+  if(S.frozen){const r=imgRect(),ix=(Q[0]-r.x)/r.s,iy=(Q[1]-r.y)/r.s,sw=2*R/(Z*r.s);ctx.drawImage(S.frozen,ix-sw/2,iy-sw/2,sw,sw,cx-R,cy-R,2*R,2*R)}
+  else if(vid.videoWidth){const s=Math.max(CW/vid.videoWidth,CH/vid.videoHeight),ox=(CW-vid.videoWidth*s)/2,oy=(CH-vid.videoHeight*s)/2,ix=(Q[0]-ox)/s,iy=(Q[1]-oy)/s,sw=2*R/(Z*s);
+    ctx.drawImage(vid,ix-sw/2,iy-sw/2,sw,sw,cx-R,cy-R,2*R,2*R)}
+  ctx.restore();ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();
+  ctx.strokeStyle='#f26a2e';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx-10,cy);ctx.lineTo(cx+10,cy);ctx.moveTo(cx,cy-10);ctx.lineTo(cx,cy+10);ctx.stroke()}
+
+/* ---------- readout ---------- */
+const ro=$('readout'),st=$('status');let lastHTML='';
+const cell=(l,v,s)=>`<div class="cell"><div class="lbl">${l}</div><div class="val">${v}</div><div class="sub">${s||'&nbsp;'}</div></div>`;
+function render(r){
+  let h,c,t;
+  if(S.mode==='sling'){
+    h=cell('Internal',r.th.toFixed(0)+'°',r.up?'tilt-corrected':'')+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
+     +cell('Leg B',r.valid?kg(r.TB):'—','kg · '+(r.valid?kn(r.TB):''))+cell('Worst leg',r.valid?Math.round(r.worst*100)+'%':'—','of load');
+    if(!r.valid){c='bad';t='<span>Not in balance.</span><span class="txt">Both legs sit on one side of the load or point down. It would swing. Re-check the points.</span>'}
+    else if(r.worst<=0.7072){c='ok';t='<span>Good.</span><span class="txt">Each leg under 71% of the load.</span>'}
+    else if(r.worst<=1.0001){c='warn';t='<span>Caution.</span><span class="txt">A leg carries 71–100% of the load. Narrow the angle if you can.</span>'}
+    else{c='bad';t=`<span>Over limit.</span><span class="txt">A leg carries ${r.worst.toFixed(1)}× the load, past the 120° equivalent.</span>`}
+  }else if(S.mode==='track'){
+    h=cell('Internal',r.th.toFixed(0)+'°','track line at load')+cell('Anchor A',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))
+     +cell('Anchor B',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))+cell('Anchor × load',r.valid?r.ratio.toFixed(2)+'×':'—','tension ÷ load');
+    if(!r.valid){c='bad';t='<span>No support.</span><span class="txt">Neither leg rises from the load, so the line can\'t hold it. Re-check the points.</span>'}
+    else if(r.ratio<=1.0001){c='ok';t='<span>Steep track.</span><span class="txt">Each anchor carries no more than the load.</span>'}
+    else if(r.ratio<=2){c='warn';t='<span>Caution.</span><span class="txt">Each anchor carries more than the load. Flatter lines climb fast; check anchors and the Z-rig.</span>'}
+    else{c='bad';t=`<span>High tension.</span><span class="txt">Each anchor carries ${r.ratio.toFixed(1)}× the load. Reduce tension or steepen the line.</span>`}
+  }else{
+    h=cell('Internal angle',r.th.toFixed(0)+'°',(180-r.th).toFixed(0)+'° change of direction')+cell('Load on rope',kg(r.Wn),'kg · '+kn(r.Wn))
+     +cell('Anchor load',kg(r.R),'kg · '+kn(r.R))+cell('Multiplier',(r.R/r.Wn).toFixed(2)+'×','of the load');
+    c='info';t='<span>Redirection anchor.</span><span class="txt">The red arrow shows the load on the redirection anchor. At 120° internal it takes the full load; at 0° (rope doubled back) it takes double.</span>';
+  }
+  const all=h+'|'+c+t;if(all===lastHTML)return;lastHTML=all;ro.innerHTML=h;st.className='status '+c;st.innerHTML=t;table(r);
+}
+function table(r){
+  const Wn=S.load[S.mode]*G;let h;
+  if(S.mode!=='edge'){const rows=[0,30,60,90,120,150,160,170],near=rows.reduce((a,b)=>Math.abs(b-r.th)<Math.abs(a-r.th)?b:a);
+    h=S.mode==='sling'?'<tr><th>Internal angle</th><th>Per leg</th><th>Leg load</th></tr>':'<tr><th>Internal angle</th><th>× load</th><th>Track tension</th></tr>';
+    for(const a of rows){const m=1/(2*Math.cos(a*Math.PI/360));h+=`<tr class="${a===near?'hit':''} ${a===120?'limit':''}"><td>${a}°</td><td>${Math.round(m*100)}%</td><td>${kg(m*Wn)} kg</td></tr>`}}
+  else{const rows=[170,150,135,120,105,90,60,45,20,0],near=rows.reduce((a,b)=>Math.abs(b-r.th)<Math.abs(a-r.th)?b:a);
+    h='<tr><th>Internal angle</th><th>% of load</th><th>Anchor load</th></tr>';
+    for(const a of rows){const m=2*Math.cos(a*Math.PI/360);h+=`<tr class="${a===near?'hit':''} ${a===120?'limit':''}"><td>${a}°</td><td>${Math.round(m*100)}%</td><td>${kg(m*Wn)} kg</td></tr>`}}
+  document.getElementById('ref').innerHTML=h;
+}
+let lastChips='';
+function chips(){
+  let h='';
+  if(S.frozen&&S.fit==='contain')h+='<span class="chip">Photo · no tilt data</span>';
+  else if(!S.tiltOn)h+='<span class="chip warn">Tilt correction off</span>';
+  else{const up=curUp(),pi=curPitch();
+    if(!up)h+=`<span class="chip warn">${performance.now()-lastMotion>2000&&!S.sensor?'No tilt sensor · hold upright':'Calibrating · hold upright'}</span>`;
+    else{const roll=Math.atan2(up[0],up[1])*180/Math.PI;h+=`<span class="chip ${Math.abs(roll)<3?'ok':''}">Roll ${roll.toFixed(1)}°</span>`;
+      if(pi!=null)h+=`<span class="chip ${pi<8?'ok':pi<15?'warn':'bad'}">Pitch ${pi.toFixed(0)}°${pi>=15?' · aim square':''}</span>`}}
+  if(S.frozen&&S.live)h+='<span class="chip">Frozen</span>';
+  if(h!==lastChips){$('chips').innerHTML=h;lastChips=h}
+}
+
+/* ---------- input ---------- */
+function evPt(e){const b=cv.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]}
+cv.addEventListener('pointerdown',e=>{if(!S.live&&!S.frozen)return;const [x,y]=evPt(e),p=S.pts[S.mode];let best=null,bd=1e9;
+  for(const k of ['P','A','B']){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}
+  if(bd<44){drag=best;cv.setPointerCapture(e.pointerId);e.preventDefault()}});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);S.pts[S.mode][drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
+const end=()=>{drag=null};cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+
+const loadIn=$('load');
+function syncUI(){
+  $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
+  $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];$('tiltOn').checked=S.tiltOn;
+  $('modeHint').textContent=({sling:'L on the load or apex, A and B up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A and B along each rope leg. Gives the load on that anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
+  $('refNote').textContent=({sling:'Red rule marks 120° internal: each leg carries 100% of the load.',edge:'Red rule marks 120° internal: the anchor takes the full load. At 0° (rope doubled back) it takes double.',track:'Assumes the load sits at the low point with equal angles each side. Use the live readout for other positions.'})[S.mode];
+  
+  const pr=S.mode==='sling'?[['1 person · 100 kg',100],['2 person · 200 kg',200],['Rescue load · 250 kg',250]]:[['1 person · 100 kg',100],['2 person · 200 kg',200],['Rescue load · 250 kg',250]];
+  $('presets').innerHTML=pr.map(([l,v])=>`<button class="pre" data-v="${v}">${l}</button>`).join('');lastHTML='';
+}
+$('presets').addEventListener('click',e=>{const b=e.target.closest('.pre');if(!b)return;S.load[S.mode]=+b.dataset.v;save();syncUI()});
+loadIn.addEventListener('input',()=>{const v=parseFloat(loadIn.value);if(isFinite(v)&&v>=0){S.load[S.mode]=v;save();lastHTML=''}});
+$('m-sling').onclick=()=>{S.mode='sling';save();syncUI()};$('m-edge').onclick=()=>{S.mode='edge';save();syncUI()};$('m-track').onclick=()=>{S.mode='track';save();syncUI()};
+$('tiltOn').onchange=e=>{S.tiltOn=e.target.checked;save();lastHTML=''};
+$('angGo').onclick=()=>{let t=Math.max(0,Math.min(178,parseFloat($('angIn').value)||0));const h=t*Math.PI/360,L=0.38*Math.min(CW,CH);
+  const up=S.mode!=='edge'?(curUp()||[0,1]):[0,-1],[ux,uy]=up;
+  const P=[CW/2,(S.mode==='edge'?0.3:0.72)*CH];
+  const dir=(ang)=>{const x=Math.sin(ang),y=Math.cos(ang);const rx=x*uy+y*ux,ry=-x*ux+y*uy;return [P[0]+rx*L,P[1]-ry*L]};
+  const n=q=>[Math.max(0,Math.min(1,q[0]/CW)),Math.max(0,Math.min(1,q[1]/CH))];S.pts[S.mode]={...S.pts[S.mode],P:n(P),A:n(dir(-h)),B:n(dir(h))};lastHTML=''};
+
+
+/* ---------- share ---------- */
+const APP_URL='https://christopherbgrankin.github.io/sling-angle-finder/SLING_3cf53b96.html';
+function openShare(){$('share-url-input').value=APP_URL;$('share-modal').hidden=false}
+function closeShare(){$('share-modal').hidden=true}
+function copied(){const b=$('share-copy-btn');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy',2000)}
+function copyShareUrl(){
+  const fallback=()=>{const i=$('share-url-input');i.focus();i.select();try{document.execCommand('copy')}catch(e){}copied()};
+  if(navigator.clipboard)navigator.clipboard.writeText(APP_URL).then(copied,fallback);else fallback()}
+function doNativeShare(){if(navigator.share)navigator.share({title:'Sling Angle Finder',text:'Rope rescue anchor load calculator',url:APP_URL}).catch(()=>{});else copyShareUrl()}
+$('share-btn').onclick=openShare;$('share-close').onclick=closeShare;$('share-copy-btn').onclick=copyShareUrl;$('share-native').onclick=doNativeShare;
+$('share-modal').addEventListener('click',e=>{if(e.target.id==='share-modal')closeShare()});
+window.addEventListener('resize',size);if(window.ResizeObserver)new ResizeObserver(size).observe(stage);
+size();syncUI();requestAnimationFrame(frame);
+if(location.protocol!=='https:'&&location.hostname!=='localhost'){gateErr('Opened as a local file. The camera only works over HTTPS: host this file (see the instructions you were given), or use a photo for now.')}
+})();
+</script>
+</body>
+</html>
