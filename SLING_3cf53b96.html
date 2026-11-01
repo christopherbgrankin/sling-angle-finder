@@ -235,6 +235,7 @@ function frame(){
   const r=compute(),p=S.pts[S.mode],P=px(p.P),A=px(p.A),B=px(p.B),C=null,rope='#f26a2e';
   ctx.lineCap='round';
   for(const Q of [A,B]){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ln(P,Q);ctx.strokeStyle=rope;ctx.lineWidth=4;ln(P,Q)}
+  {let bx=r.ax+r.bx,by=-(r.ay+r.by);const bl=Math.hypot(bx,by);if(bl>1e-3){bx/=bl;by/=bl;const L=Math.max(CW,CH);ctx.setLineDash([7,7]);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,.85)';ln([P[0]-bx*L,P[1]-by*L],[P[0]+bx*L,P[1]+by*L]);ctx.setLineDash([])}}
   if(C){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=6;ln(P,C);ctx.strokeStyle='#4c8dff';ctx.lineWidth=3;ln(P,C)}
   const a1=Math.atan2(-r.ay,r.ax),a2=Math.atan2(-r.by,r.bx);let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
   let S0=a1;ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
