@@ -97,6 +97,12 @@ tr.limit td{border-bottom:2px solid var(--bad)}
 #share-copy-btn,#share-native{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:10px 14px;font:600 13px var(--body);cursor:pointer;white-space:nowrap}
 #share-native{width:100%;border-radius:12px;padding:13px 0;font-size:15px}
 #share-close{background:rgba(255,255,255,.1);color:var(--ink);border:0;border-radius:12px;padding:12px 0;font:600 15px var(--body);cursor:pointer;width:100%}
+#update-bar{position:fixed;left:0;right:0;bottom:0;z-index:500;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--accent);color:var(--accent-ink);font-weight:600;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+#update-bar button{background:var(--accent-ink);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:700 14px var(--body);cursor:pointer}
+.ver{font:12px var(--mono);color:var(--muted);margin:0}
+body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
 [hidden]{display:none!important}
 .top h1{order:1}.top .seg{order:3}
 </style>
@@ -154,6 +160,7 @@ tr.limit td{border-bottom:2px solid var(--bad)}
   </details>
 
   <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Hold the phone upright, side-on and square to the rig: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
+  <div class="row" style="align-items:center;justify-content:space-between"><p class="ver">Version 2026.11.03 · <span id="update-when"></span></p><button class="btn" id="update-check" type="button">Check for updates</button></div>
 </div>
 
 <div id="share-modal" hidden>
@@ -169,6 +176,8 @@ tr.limit td{border-bottom:2px solid var(--bad)}
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
+
+<div id="update-bar" role="status" hidden><span>Update downloaded.</span><button id="update-go" type="button">Reload now</button></div>
 
 <script>
 (()=>{
@@ -434,6 +443,29 @@ function copyShareUrl(){
 function doNativeShare(){if(navigator.share)navigator.share({title:'Sling Angle Finder',text:'Rope rescue anchor load calculator',url:APP_URL}).catch(()=>{});else copyShareUrl()}
 $('share-btn').onclick=openShare;$('share-close').onclick=closeShare;$('share-copy-btn').onclick=copyShareUrl;$('share-native').onclick=doNativeShare;
 $('share-modal').addEventListener('click',e=>{if(e.target.id==='share-modal')closeShare()});
+
+/* ---------- offline + auto-update (checks every 14 days) ---------- */
+(()=>{
+  const bar=$('update-bar'),msg=bar.querySelector('span'),go=$('update-go'),btn=$('update-check'),EVERY=14*864e5,KEY='saf-lastcheck';
+  const last=()=>{try{return +localStorage.getItem(KEY)||0}catch(e){return 0}},mark=()=>{try{localStorage.setItem(KEY,Date.now())}catch(e){}};
+  const stamp=()=>{const t=last();$('update-when').textContent=t?'Last checked '+new Date(t).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}):'Not checked yet'};
+  stamp();
+  if(!('serviceWorker' in navigator)||(location.protocol!=='https:'&&location.hostname!=='localhost')){btn.hidden=true;return}
+  let manual=false;
+  const check=m=>{manual=m;if(m)btn.textContent='Checking…';
+    navigator.serviceWorker.ready.then(r=>{(navigator.serviceWorker.controller||r.active).postMessage({type:'check',url:location.href.split('#')[0].split('?')[0]});r.update().catch(()=>{})})};
+  navigator.serviceWorker.register('sw.js').then(()=>{if(Date.now()-last()>=EVERY)check(false)}).catch(()=>{btn.hidden=true});
+  navigator.serviceWorker.addEventListener('message',e=>{const t=e.data&&e.data.type;if(!t)return;
+    btn.textContent='Check for updates';
+    if(t==='error'){if(manual){btn.textContent='No connection, try later'}return}
+    mark();stamp();
+    if(t==='current'){if(manual)btn.textContent='Up to date';return}
+    if(t==='updated'){
+      if(!S.live&&!S.frozen){location.reload();return}
+      msg.textContent='Update downloaded. It applies next time you open the app.';bar.hidden=false}});
+  btn.onclick=()=>check(true);
+  go.onclick=()=>location.reload();
+})();
 window.addEventListener('resize',size);if(window.ResizeObserver)new ResizeObserver(size).observe(stage);
 size();syncUI();requestAnimationFrame(frame);
 if(location.protocol!=='https:'&&location.hostname!=='localhost'){gateErr('Opened as a local file. The camera only works over HTTPS: host this file (see the instructions you were given), or use a photo for now.')}
