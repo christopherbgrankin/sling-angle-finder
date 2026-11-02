@@ -118,6 +118,7 @@ tr.limit td{border-bottom:2px solid var(--bad)}
   <canvas id="cv" aria-label="Camera view with draggable measurement points"></canvas>
   <div class="chips" id="chips"></div>
   <div class="shutter" id="shutter" hidden>
+    <button class="fab ghost" id="relock" hidden>Auto-lock</button>
     <button class="fab" id="freeze">Freeze</button>
   </div>
   <div class="gate" id="gate">
@@ -173,7 +174,7 @@ tr.limit td{border-bottom:2px solid var(--bad)}
 (()=>{
 const G=0.00980665, $=id=>document.getElementById(id);
 const stage=$('stage'),vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
-const S={mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
+const S={auto:null,mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
   pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}}};
 try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode}catch(e){}
 const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode}))}catch(e){}};
@@ -196,16 +197,16 @@ async function startCam(){
 }
 function gateErr(m){const e=$('gateErr');e.textContent=m;e.hidden=false}
 function freeze(){
-  if(S.frozen&&S.live){S.frozen=null;vid.hidden=false;vid.play();setFreezeBtn();return}
+  if(S.frozen&&S.live){S.frozen=null;S.auto=null;vid.hidden=false;vid.play();setFreezeBtn();return}
   if(!vid.videoWidth)return;
   const c=document.createElement('canvas');c.width=vid.videoWidth;c.height=vid.videoHeight;c.getContext('2d').drawImage(vid,0,0);
-  S.frozen=c;S.fit='cover';vid.pause();vid.hidden=true;setFreezeBtn();
+  S.frozen=c;S.fit='cover';vid.pause();vid.hidden=true;setFreezeBtn();autoLock();
 }
-function setFreezeBtn(){const b=$('freeze');b.textContent=S.frozen?'Back to live':'Freeze';b.className=S.frozen?'fab ghost':'fab'}
-$('start').onclick=startCam;$('freeze').onclick=freeze;
+function setFreezeBtn(){$('relock').hidden=!S.frozen;const b=$('freeze');b.textContent=S.frozen?'Back to live':'Freeze';b.className=S.frozen?'fab ghost':'fab'}
+$('start').onclick=startCam;$('freeze').onclick=freeze;$('relock').onclick=()=>{autoLock()};
 $('pick').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image();
   im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
-    S.frozen=c;S.fit='contain';S.live=false;$('gate').hidden=true;$('shutter').hidden=true;vid.hidden=true};
+    S.frozen=c;S.fit='contain';S.live=false;$('gate').hidden=true;$('shutter').hidden=false;$('freeze').hidden=true;$('relock').hidden=false;vid.hidden=true;autoLock()};
   im.src=URL.createObjectURL(f)};
 
 /* ---------- geometry ---------- */
@@ -308,11 +309,86 @@ function table(r){
     for(const a of rows){const m=2*Math.cos(a*Math.PI/360);h+=`<tr class="${a===near?'hit':''} ${a===120?'limit':''}"><td>${a}°</td><td>${Math.round(m*100)}%</td><td>${kg(m*Wn)} kg</td></tr>`}}
   document.getElementById('ref').innerHTML=h;
 }
+/* ---------- auto-lock onto ropes ---------- */
+function ropeMasks(src){
+  const M=360,sc=Math.min(1,M/Math.max(src.width,src.height)),w=Math.max(16,Math.round(src.width*sc)),h=Math.max(16,Math.round(src.height*sc));
+  const oc=document.createElement('canvas');oc.width=w;oc.height=h;const ox=oc.getContext('2d',{willReadFrequently:true});ox.drawImage(src,0,0,w,h);
+  const d=ox.getImageData(0,0,w,h).data,N=w*h,sat=new Float32Array(N),lum=new Float32Array(N),hue=new Float32Array(N);
+  for(let i=0;i<N;i++){const r=d[i*4]/255,g=d[i*4+1]/255,b=d[i*4+2]/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),c=mx-mn;
+    sat[i]=(mx>0?c/mx:0)*Math.min(1,mx*2.5);lum[i]=.299*r+.587*g+.114*b;
+    hue[i]=c===0?0:mx===r?((g-b)/c+6)%6:mx===g?(b-r)/c+2:(r-g)/c+4}
+  const pct=(a,q)=>{const s=Float32Array.from(a).sort();return s[Math.min(s.length-1,Math.floor(s.length*q))]};
+  const masks=[],st=Math.max(.32,pct(sat,.9)),col=new Uint8Array(N),hist=new Uint32Array(24);
+  for(let i=0;i<N;i++)if(sat[i]>=st){col[i]=1;hist[Math.floor(hue[i]*4)%24]++}
+  const bins=[...hist.keys()].sort((a,b)=>hist[b]-hist[a]).slice(0,4).filter(k=>hist[k]>w*.4);
+  for(const k of bins){const m=new Uint8Array(N);for(let i=0;i<N;i++)if(col[i]){const hb=Math.floor(hue[i]*4)%24,dd=Math.min((hb-k+24)%24,(k-hb+24)%24);if(dd<=1)m[i]=1}masks.push({m,wt:1})}
+  masks.push({m:col,wt:1});
+  const mag=new Float32Array(N);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x,
+    gx=lum[i-w+1]+2*lum[i+1]+lum[i+w+1]-lum[i-w-1]-2*lum[i-1]-lum[i+w-1],
+    gy=lum[i+w-1]+2*lum[i+w]+lum[i+w+1]-lum[i-w-1]-2*lum[i-w]-lum[i-w+1];mag[i]=Math.hypot(gx,gy)}
+  const et=Math.max(.25,pct(mag,.94)),edg=new Uint8Array(N);for(let i=0;i<N;i++)edg[i]=mag[i]>=et?1:0;
+  masks.push({m:edg,wt:.8});
+  return {w,h,sc,masks};
+}
+function findV(mask,w,h){
+  const T=180,diag=Math.ceil(Math.hypot(w,h)),R=2*diag+1,acc=new Uint32Array(T*R),cs=new Float32Array(T),sn=new Float32Array(T);
+  for(let t=0;t<T;t++){cs[t]=Math.cos(t*Math.PI/T);sn[t]=Math.sin(t*Math.PI/T)}
+  let cnt=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(mask[y*w+x]){cnt++;for(let t=0;t<T;t++)acc[t*R+Math.round(x*cs[t]+y*sn[t])+diag]++}
+  if(cnt<diag*.3)return null;
+  const peaks=[],used=new Uint8Array(T*R);
+  for(let k=0;k<12;k++){let best=0,bi=-1;for(let i=0;i<acc.length;i++)if(!used[i]&&acc[i]>best){best=acc[i];bi=i}
+    if(bi<0||best<Math.max(12,diag*.08))break;const t=Math.floor(bi/R),r=bi%R-diag;peaks.push({t,r,v:best});
+    for(let dt=-5;dt<=5;dt++)for(let dr=-10;dr<=10;dr++){let tt=t+dt,rr=r+dr;if(tt<0){tt+=T;rr=-rr}else if(tt>=T){tt-=T;rr=-rr}const ri=rr+diag;if(ri>=0&&ri<R)used[tt*R+ri]=1}}
+  const at=(x,y)=>{const xi=Math.round(x),yi=Math.round(y);return xi>=0&&yi>=0&&xi<w&&yi<h&&mask[yi*w+xi]};
+  const band=(x,y,nx,ny,o0,o1)=>{for(let o=o0;o<=o1;o++)if(at(x+nx*o,y+ny*o))return true;return false};
+  const walk=(P,dx,dy,nx,ny)=>{let sup=0,end=0,first=-1;const gapMax=diag*.08;
+    for(let s=1;s<diag;s++){const x=P[0]+dx*s,y=P[1]+dy*s;if(x<0||y<0||x>=w||y>=h)break;
+      if(band(x,y,nx,ny,-2,2)){end=s;if(first<0)first=s;if(!band(x,y,nx,ny,6,8)&&!band(x,y,nx,ny,-8,-6))sup++}else if(end&&s-end>gapMax)break}
+    return {sup,end,first:first<0?1e9:first}};
+  let best=null;
+  for(let i=0;i<peaks.length;i++)for(let j=i+1;j<peaks.length;j++){
+    const a=peaks[i],b=peaks[j];let dt=Math.abs(a.t-b.t);dt=Math.min(dt,180-dt);if(dt<8)continue;
+    const ca=cs[a.t],sa=sn[a.t],cb=cs[b.t],sb=sn[b.t],det=ca*sb-sa*cb;if(Math.abs(det)<1e-6)continue;
+    const P=[(a.r*sb-b.r*sa)/det,(ca*b.r-cb*a.r)/det];if(P[0]<w*.03||P[0]>w*.97||P[1]<h*.03||P[1]>h*.97)continue;
+    const arm=(c,s)=>{const f=walk(P,-s,c,c,s),g=walk(P,s,-c,c,s);return f.sup>=g.sup?{dir:[-s,c],...f,back:g.sup}:{dir:[s,-c],...g,back:f.sup}};
+    const A=arm(ca,sa),B=arm(cb,sb);if(A.sup<diag*.1||B.sup<diag*.1)continue;
+    let score=Math.min(A.sup,B.sup)-.6*Math.max(A.back,B.back);if(Math.max(A.first,B.first)>diag*.06)score*=.5;
+    if(!best||score>best.score)best={score,P,A,B,diag};
+  }
+  if(!best)return null;
+  // refine each arm with a least-squares fit of the rope pixels along it
+  const fit=a=>{const [dx,dy]=a.dir,nx=-dy,ny=dx;let n=0,mx=0,my=0;const pts=[];
+    for(let t=Math.max(3,a.first);t<=a.end;t++)for(let o=-4;o<=4;o++){const x=best.P[0]+dx*t+nx*o,y=best.P[1]+dy*t+ny*o;if(at(x,y)){pts.push([x,y]);mx+=x;my+=y;n++}}
+    if(n<10)return null;mx/=n;my/=n;let sxx=0,syy=0,sxy=0;for(const [x,y] of pts){sxx+=(x-mx)**2;syy+=(y-my)**2;sxy+=(x-mx)*(y-my)}
+    const th=.5*Math.atan2(2*sxy,sxx-syy);let ux=Math.cos(th),uy=Math.sin(th);if(ux*dx+uy*dy<0){ux=-ux;uy=-uy}return {m:[mx,my],u:[ux,uy]}};
+  const fa=fit(best.A),fb=fit(best.B);
+  if(fa&&fb){const det=fa.u[0]*(-fb.u[1])-fa.u[1]*(-fb.u[0]);
+    if(Math.abs(det)>1e-3){const rx=fb.m[0]-fa.m[0],ry=fb.m[1]-fa.m[1],t=(rx*(-fb.u[1])-ry*(-fb.u[0]))/det,P=[fa.m[0]+fa.u[0]*t,fa.m[1]+fa.u[1]*t];
+      if(Math.hypot(P[0]-best.P[0],P[1]-best.P[1])<diag*.05){
+        const ea=Math.hypot(best.P[0]+best.A.dir[0]*best.A.end-P[0],best.P[1]+best.A.dir[1]*best.A.end-P[1]),eb=Math.hypot(best.P[0]+best.B.dir[0]*best.B.end-P[0],best.P[1]+best.B.dir[1]*best.B.end-P[1]);
+        best.P=P;best.A={...best.A,dir:fa.u,end:ea};best.B={...best.B,dir:fb.u,end:eb}}}}
+  return best;
+}
+function autoLock(){
+  if(!S.frozen){S.auto=null;return false}
+  const {w,h,sc,masks}=ropeMasks(S.frozen);let v=null;
+  for(const {m,wt} of masks){if(v&&wt<1)break;const c=findV(m,w,h);if(c&&c.score>=c.diag*.12){if(!v||c.score>v.score)v=c}}
+  if(!v){S.auto='fail';return false}
+  const r=imgRect(),toN=(x,y)=>[(r.x+x/sc*r.s)/CW,(r.y+y/sc*r.s)/CH],inV=q=>q[0]>=.04&&q[0]<=.96&&q[1]>=.04&&q[1]<=.96;
+  const P=toN(...v.P);if(!inV(P)){S.auto='fail';return false}
+  const tip=a=>{for(let s=a.end*.92;s>0;s-=1){const q=toN(v.P[0]+a.dir[0]*s,v.P[1]+a.dir[1]*s);if(inV(q))return q}return null};
+  let A=tip(v.A),B=tip(v.B);if(!A||!B){S.auto='fail';return false}
+  if(S.mode==='track'?A[1]>B[1]:A[0]>B[0])[A,B]=[B,A];
+  S.pts[S.mode]={...S.pts[S.mode],P,A,B};S.auto='ok';lastHTML='';return true;
+}
 let lastChips='';
 function chips(){
   let h='';
   if(S.frozen&&S.fit==='contain')h+='<span class="chip">Photo</span>';
   if(S.frozen&&S.live)h+='<span class="chip">Frozen</span>';
+  if(S.frozen&&S.auto==='ok')h+='<span class="chip ok">Auto-locked · drag to adjust</span>';
+  if(S.frozen&&S.auto==='fail')h+='<span class="chip warn">Ropes not found · drag the points</span>';
   if(h!==lastChips){$('chips').innerHTML=h;lastChips=h}
 }
 
@@ -320,7 +396,7 @@ function chips(){
 function evPt(e){const b=cv.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]}
 cv.addEventListener('pointerdown',e=>{if(!S.live&&!S.frozen)return;const [x,y]=evPt(e),p=S.pts[S.mode];let best=null,bd=1e9;
   for(const k of ['P','A','B']){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}
-  if(bd<44){drag=best;cv.setPointerCapture(e.pointerId);e.preventDefault()}});
+  if(bd<44){drag=best;if(S.auto)S.auto='adj';cv.setPointerCapture(e.pointerId);e.preventDefault()}});
 cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);S.pts[S.mode][drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
 const end=()=>{drag=null};
 for(const ev of ['touchstart','touchmove'])cv.addEventListener(ev,e=>{if(S.live||S.frozen)e.preventDefault()},{passive:false});
@@ -339,7 +415,7 @@ function syncUI(){
 }
 $('presets').addEventListener('click',e=>{const b=e.target.closest('.pre');if(!b)return;S.load[S.mode]=+b.dataset.v;save();syncUI()});
 loadIn.addEventListener('input',()=>{const v=parseFloat(loadIn.value);if(isFinite(v)&&v>=0){S.load[S.mode]=v;save();lastHTML=''}});
-$('m-sling').onclick=()=>{S.mode='sling';save();syncUI()};$('m-edge').onclick=()=>{S.mode='edge';save();syncUI()};$('m-track').onclick=()=>{S.mode='track';save();syncUI()};
+$('m-sling').onclick=()=>{S.mode='sling';save();syncUI();if(S.frozen)autoLock()};$('m-edge').onclick=()=>{S.mode='edge';save();syncUI();if(S.frozen)autoLock()};$('m-track').onclick=()=>{S.mode='track';save();syncUI();if(S.frozen)autoLock()};
 $('angGo').onclick=()=>{let t=Math.max(0,Math.min(178,parseFloat($('angIn').value)||0));const h=t*Math.PI/360,L=0.38*Math.min(CW,CH);
   const [ux,uy]=S.mode!=='edge'?[0,1]:[0,-1];
   const P=[CW/2,(S.mode==='edge'?0.3:0.72)*CH];
