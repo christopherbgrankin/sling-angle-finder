@@ -160,7 +160,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
   </details>
 
   <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Hold the phone upright, side-on and square to the rig: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
-  <div class="row" style="align-items:center;justify-content:space-between"><p class="ver">Version 2026.11.03 · <span id="update-when"></span></p><button class="btn" id="update-check" type="button">Check for updates</button></div>
+  <div class="row" style="align-items:center;justify-content:space-between"><p class="ver">Version 2026.11.03.2 · <span id="update-when"></span></p><button class="btn" id="update-check" type="button">Check for updates</button></div>
 </div>
 
 <div id="share-modal" hidden>
@@ -256,8 +256,12 @@ function frame(){
     if(x-w/2<2||x+w/2>CW-2||y<12||y>CH-12){x=Q[0];y=Q[1]>40?Q[1]-32:Q[1]+32}
     label(x,y,t)};
   if(S.mode!=='edge'){arrow(P,[P[0],P[1]+62],'#e6edf4',kg(r.Wn)+' kg');
-    if(r.valid){if(S.mode==='sling'){near(A,kg(r.TA)+' kg');near(B,kg(r.TB)+' kg')}else{near(A,kg(r.T)+' kg');near(B,kg(r.T)+' kg')}}}
-  else{near(B,kg(r.Wn)+' kg');let ux=r.ax+r.bx,uy=-(r.ay+r.by);const l=Math.hypot(ux,uy);if(l>1e-3)arrow(P,[P[0]-ux/l*70,P[1]-uy/l*70],'#ff6b6b',kg(r.R)+' kg')}
+    if(r.valid){if(S.mode==='sling'){near(A,'Anchor · '+kg(r.TA)+' kg');near(B,'Anchor · '+kg(r.TB)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
+  else{near(A,'Anchor');
+    {let dx=B[0]-P[0],dy=B[1]-P[1];const l=Math.hypot(dx,dy)||1;dx/=l;dy/=l;let len=64;
+     const room=(c,d,max)=>d>0?(max-14-c)/d:d<0?(c-14)/-d:1e9;len=Math.max(24,Math.min(len,room(B[0],dx,CW),room(B[1],dy,CH)));
+     arrow(B,[B[0]+dx*len,B[1]+dy*len],'#e6edf4',kg(r.Wn)+' kg')}
+    let ux=r.ax+r.bx,uy=-(r.ay+r.by);const l=Math.hypot(ux,uy);if(l>1e-3)arrow(P,[P[0]-ux/l*70,P[1]-uy/l*70],'#ff6b6b',kg(r.R)+' kg')}
   for(const [k,Q] of [['A',A],['B',B],...(C?[['C',C]]:[]),['P',P]]){ctx.fillStyle=k==='P'?rope:k==='C'?'#2f6fe0':'#132030';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
     ctx.beginPath();ctx.arc(Q[0],Q[1],14,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='700 13px '+getComputedStyle(document.body).getPropertyValue('--mono');
     ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(k==='P'?(S.mode==='edge'?'E':'L'):k,Q[0],Q[1]+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
@@ -415,7 +419,7 @@ const loadIn=$('load');
 function syncUI(){
   $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
   $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];
-  $('modeHint').textContent=({sling:'L on the load or apex, A and B up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A and B along each rope leg. Gives the load on that anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('modeHint').textContent=({sling:'L on the load or apex, A and B up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
   $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
   $('refNote').textContent=({sling:'Red rule marks 120° internal: each leg carries 100% of the load.',edge:'Red rule marks 120° internal: the anchor takes the full load. At 0° (rope doubled back) it takes double.',track:'Assumes the load sits at the low point with equal angles each side. Use the live readout for other positions.'})[S.mode];
   
