@@ -2,10 +2,14 @@
    - Offline: the app is served from the cache, so it opens with no signal.
    - Only complete 200 responses are ever cached (a dropped download can't poison the cache).
    - Update checks are driven by the page (every 14 days, or on demand). */
-const CACHE = 'saf-v2';
-const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+const CACHE = 'saf-v3';
+// Everything the app needs, saved on install so it works with no signal from the first visit.
+const APP_FILES = ['SLING_3cf53b96.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', e => e.waitUntil((async () => {
+  for (const f of APP_FILES) { try { await refresh(new Request(new URL(f, self.registration.scope)), false); } catch (err) {} }
+  await self.skipWaiting();
+})()));
 self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
   await self.clients.claim();
@@ -14,7 +18,7 @@ self.addEventListener('activate', e => e.waitUntil((async () => {
 // Fetch fresh, read the whole body, cache it. Returns {res, changed}.
 async function refresh(req, compare) {
   const res = await fetch(req, { cache: 'no-store' });
-  if (!res || res.status !== 200 || (res.type !== 'basic' && res.type !== 'cors')) return { res, changed: false, failed: true };
+  if (!res || res.status !== 200 || res.type !== 'basic') return { res, changed: false, failed: true };
   const body = await res.clone().arrayBuffer();
   const cache = await caches.open(CACHE);
   let changed = false;
@@ -34,7 +38,7 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== location.origin && !FONT_HOSTS.includes(url.hostname)) return;
+  if (url.origin !== location.origin) return;
   if (url.pathname.endsWith('/sw.js')) return;
   e.respondWith((async () => {
     const hit = await (await caches.open(CACHE)).match(req, { ignoreSearch: true });
