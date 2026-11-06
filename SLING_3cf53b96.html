@@ -26,7 +26,7 @@
 :root{
   --bg:#0f1720; --surface:#17222e; --raised:#1f2d3b; --ink:#e6edf4; --muted:#93a2b3; --line:#2a3847;
   --accent:#f26a2e; --accent-ink:#0f1720;
-  --ok:#5fc470; --warn:#f0a83a; --bad:#ff6b6b; --okbg:#173022; --warnbg:#33260f; --badbg:#3a1a1c;
+  --ok:#5fc470; --warn:#f5d33a; --bad:#ff6b6b; --okbg:#173022; --warnbg:#332f0f; --badbg:#3a1a1c;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -65,6 +65,7 @@ button:focus-visible,input:focus-visible,label.btn:focus-within{outline:3px soli
 .val{font-family:var(--mono);font-weight:700;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:3px;white-space:nowrap}
 .sub{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .status{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;font-weight:600;border:1.5px solid currentColor}
+.val.b-ok{color:#5fc470}.val.b-warn{color:#f5d33a}.val.b-bad{color:#ff5a5a}
 .status.ok{color:var(--ok);background:var(--okbg)} .status.warn{color:var(--warn);background:var(--warnbg)} .status.bad{color:var(--bad);background:var(--badbg)} .status.info{color:var(--muted);background:var(--surface)}
 .status .txt{color:var(--ink);font-weight:500}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:13px;display:flex;flex-direction:column;gap:11px}
@@ -184,7 +185,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.06 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.06.2 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -260,8 +261,9 @@ function frame(){
   {let bx=r.ax+r.bx,by=-(r.ay+r.by);const bl=Math.hypot(bx,by);if(bl>1e-3){bx/=bl;by/=bl;const L=Math.max(CW,CH);ctx.setLineDash([7,7]);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,.85)';ln([P[0]-bx*L,P[1]-by*L],[P[0]+bx*L,P[1]+by*L]);ctx.setLineDash([])}}
   if(C){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=6;ln(P,C);ctx.strokeStyle='#4c8dff';ctx.lineWidth=3;ln(P,C)}
   const a1=Math.atan2(-r.ay,r.ax),a2=Math.atan2(-r.by,r.bx);let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
-  let S0=a1;ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
-  const mid=S0+d/2;label(P[0]+Math.cos(mid)*60,P[1]+Math.sin(mid)*60,r.th.toFixed(0)+'°',true);
+  const bc=BAND_COL[band(r)];let S0=a1;ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
+  ctx.strokeStyle=bc;ctx.lineWidth=4;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
+  const mid=S0+d/2;label(P[0]+Math.cos(mid)*60,P[1]+Math.sin(mid)*60,r.th.toFixed(0)+'°',true,bc);
   LQ=[];
   const near=(Q,t)=>{const dx=Q[0]-P[0],dy=Q[1]-P[1],l=Math.hypot(dx,dy)||1;let x=Q[0]+dx/l*44,y=Q[1]+dy/l*44;
     ctx.font='700 12px JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12;
@@ -283,10 +285,13 @@ function frame(){
 }
 function ln(a,b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
 let LQ=null;
-function label(x,y,t,big){if(LQ){LQ.push([x,y,t,big]);return}ctx.font=(big?'700 16px ':'700 12px ')+'JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12,h=big?24:20;
+const BAND_COL={ok:'#5fc470',warn:'#f5d33a',bad:'#ff5a5a'};
+/* green: anchor load at or under the actual load; yellow: up to double; red: more than double */
+function band(r){if(r.valid===false)return 'bad';const k=S.mode==='sling'?r.worst:S.mode==='track'?r.ratio:r.R/r.Wn;return !isFinite(k)?'bad':k<=1.0001?'ok':k<=2.0001?'warn':'bad'}
+function label(x,y,t,big,col){if(LQ){LQ.push([x,y,t,big,col]);return}ctx.font=(big?'700 16px ':'700 12px ')+'JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12,h=big?24:20;
   x=Math.max(w/2+2,Math.min(CW-w/2-2,x));y=Math.max(h/2+2,Math.min(CH-h/2-2,y));
-  ctx.fillStyle='rgba(15,23,32,.88)';ctx.beginPath();ctx.roundRect?ctx.roundRect(x-w/2,y-h/2,w,h,5):ctx.rect(x-w/2,y-h/2,w,h);ctx.fill();
-  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,x,y+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
+  ctx.fillStyle=col||'rgba(15,23,32,.88)';ctx.beginPath();ctx.roundRect?ctx.roundRect(x-w/2,y-h/2,w,h,5):ctx.rect(x-w/2,y-h/2,w,h);ctx.fill();
+  ctx.fillStyle=col?'#0f1720':'#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,x,y+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
 function arrow(a,b,c,t){const ang=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.strokeStyle='#000';ctx.lineWidth=6;ln(a,b);ctx.strokeStyle=c;ctx.fillStyle=c;ctx.lineWidth=3;ln(a,b);
   ctx.beginPath();ctx.moveTo(b[0]+Math.cos(ang)*8,b[1]+Math.sin(ang)*8);ctx.lineTo(b[0]+Math.cos(ang+2.5)*12,b[1]+Math.sin(ang+2.5)*12);ctx.lineTo(b[0]+Math.cos(ang-2.5)*12,b[1]+Math.sin(ang-2.5)*12);ctx.fill();
   label(b[0]+Math.cos(ang)*24,b[1]+Math.sin(ang)*24,t)}
@@ -300,27 +305,28 @@ function loupe(Q){const R=54,Z=3,cx=Q[0]<CW/2?CW-R-12:R+12,cy=R+44;
 
 /* ---------- readout ---------- */
 const ro=$('readout'),st=$('status');let lastHTML='';
-const cell=(l,v,s)=>`<div class="cell"><div class="lbl">${l}</div><div class="val">${v}</div><div class="sub">${s||'&nbsp;'}</div></div>`;
+const cell=(l,v,s,k)=>`<div class="cell"><div class="lbl">${l}</div><div class="val${k?' b-'+k:''}">${v}</div><div class="sub">${s||'&nbsp;'}</div></div>`;
 function render(r){
   let h,c,t;
   if(S.mode==='sling'){
-    h=cell('Internal',r.th.toFixed(0)+'°','')+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
+    h=cell('Internal',r.th.toFixed(0)+'°','',band(r))+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
      +cell('Leg B',r.valid?kg(r.TB):'—','kg · '+(r.valid?kn(r.TB):''))+cell('Worst leg',r.valid?Math.round(r.worst*100)+'%':'—','of load');
     if(!r.valid){c='bad';t='<span>Not in balance.</span><span class="txt">Both legs sit on one side of the load or point down. It would swing. Re-check the points.</span>'}
-    else if(r.worst<=0.7072){c='ok';t='<span>Good.</span><span class="txt">Each leg under 71% of the load.</span>'}
-    else if(r.worst<=1.0001){c='warn';t='<span>Caution.</span><span class="txt">A leg carries 71–100% of the load. Narrow the angle if you can.</span>'}
-    else{c='bad';t=`<span>Over limit.</span><span class="txt">A leg carries ${r.worst.toFixed(1)}× the load, past the 120° equivalent.</span>`}
+    else if(r.worst<=1.0001){c='ok';t='<span>Good.</span><span class="txt">Each anchor carries no more than the load.</span>'}
+    else if(r.worst<=2.0001){c='warn';t=`<span>Caution.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load. Narrow the angle if you can.</span>`}
+    else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load, more than double. Narrow the angle.</span>`}
   }else if(S.mode==='track'){
-    h=cell('Internal',r.th.toFixed(0)+'°','track line at load')+cell('Anchor A',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))
+    h=cell('Internal',r.th.toFixed(0)+'°','track line at load',band(r))+cell('Anchor A',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))
      +cell('Anchor B',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))+cell('Anchor × load',r.valid?r.ratio.toFixed(2)+'×':'—','tension ÷ load');
     if(!r.valid){c='bad';t='<span>No support.</span><span class="txt">Neither leg rises from the load, so the line can\'t hold it. Re-check the points.</span>'}
     else if(r.ratio<=1.0001){c='ok';t='<span>Steep track.</span><span class="txt">Each anchor carries no more than the load.</span>'}
     else if(r.ratio<=2){c='warn';t='<span>Caution.</span><span class="txt">Each anchor carries more than the load. Flatter lines climb fast; check anchors and the Z-rig.</span>'}
     else{c='bad';t=`<span>High tension.</span><span class="txt">Each anchor carries ${r.ratio.toFixed(1)}× the load. Reduce tension or steepen the line.</span>`}
   }else{
-    h=cell('Internal angle',r.th.toFixed(0)+'°',(180-r.th).toFixed(0)+'° change of direction')+cell('Load on rope',kg(r.Wn),'kg · '+kn(r.Wn))
+    h=cell('Internal angle',r.th.toFixed(0)+'°',(180-r.th).toFixed(0)+'° change of direction',band(r))+cell('Load on rope',kg(r.Wn),'kg · '+kn(r.Wn))
      +cell('Anchor load',kg(r.R),'kg · '+kn(r.R))+cell('Multiplier',(r.R/r.Wn).toFixed(2)+'×','of the load');
-    c='info';t='<span>Redirection anchor.</span><span class="txt">The red arrow shows the load on the redirection anchor. At 120° internal it takes the full load; at 0° (rope doubled back) it takes double.</span>';
+    {const k=r.R/r.Wn;c=band(r);t=c==='ok'?'<span>Good.</span><span class="txt">The redirection anchor carries no more than the load (120° internal or wider).</span>'
+      :`<span>${c==='bad'?'Over limit.':'Caution.'}</span><span class="txt">The redirection anchor carries ${k.toFixed(2)}× the load. It reaches double when the rope doubles straight back.</span>`}
   }
   const all=h+'|'+c+t;if(all===lastHTML)return;lastHTML=all;ro.innerHTML=h;st.className='status '+c;st.innerHTML=t;table(r);
 }
