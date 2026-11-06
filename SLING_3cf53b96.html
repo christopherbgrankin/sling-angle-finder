@@ -102,6 +102,10 @@ tr.limit td{border-bottom:2px solid var(--bad)}
 #share-url-input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--ink);font:12px var(--mono)}
 #share-copy-btn,#share-native{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:10px 14px;font:600 13px var(--body);cursor:pointer;white-space:nowrap}
 #share-native{width:100%;border-radius:12px;padding:13px 0;font-size:15px}
+#update-check{width:100%;background:transparent;color:var(--ink);border:1.5px solid var(--accent);border-radius:12px;padding:12px 0;font:600 15px var(--body);cursor:pointer}
+#update-status{font-size:13px;color:var(--muted);text-align:center;min-height:1em}
+#update-status.ok{color:var(--ok)}#update-status.err{color:var(--bad)}
+#share-box .ver{text-align:center}
 #share-close{background:rgba(255,255,255,.1);color:var(--ink);border:0;border-radius:12px;padding:12px 0;font:600 15px var(--body);cursor:pointer;width:100%}
 #update-bar{position:fixed;left:0;right:0;bottom:0;z-index:500;display:flex;align-items:center;justify-content:space-between;gap:12px;
   background:var(--accent);color:var(--accent-ink);font-weight:600;
@@ -166,7 +170,6 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
   </details>
 
   <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Hold the phone upright, side-on and square to the rig: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
-  <div class="row" style="align-items:center;justify-content:space-between"><p class="ver">Version 2026.11.05 · <span id="update-when"></span></p><button class="btn" id="update-check" type="button">Check for updates</button></div>
 </div>
 
 <div id="share-modal" hidden>
@@ -179,6 +182,9 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
       <button id="share-copy-btn" type="button">Copy</button>
     </div>
     <button id="share-native" type="button">&#8599; Share link</button>
+    <button id="update-check" type="button">&#8635; Check for updates</button>
+    <div id="update-status" role="status"></div>
+    <p class="ver">Version 2026.11.06 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -444,7 +450,7 @@ $('angGo').onclick=()=>{let t=Math.max(0,Math.min(178,parseFloat($('angIn').valu
 
 /* ---------- share ---------- */
 const APP_URL='https://christopherbgrankin.github.io/sling-angle-finder/SLING_3cf53b96.html';
-function openShare(){$('share-url-input').value=APP_URL;$('share-modal').hidden=false}
+function openShare(){$('share-url-input').value=APP_URL;$('update-status').textContent='';$('share-modal').hidden=false}
 function closeShare(){$('share-modal').hidden=true}
 function copied(){const b=$('share-copy-btn');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy',2000)}
 function copyShareUrl(){
@@ -454,24 +460,24 @@ function doNativeShare(){if(navigator.share)navigator.share({title:'Sling Angle 
 $('share-btn').onclick=openShare;$('share-close').onclick=closeShare;$('share-copy-btn').onclick=copyShareUrl;$('share-native').onclick=doNativeShare;
 $('share-modal').addEventListener('click',e=>{if(e.target.id==='share-modal')closeShare()});
 
-/* ---------- offline + auto-update (checks every 14 days) ---------- */
+/* ---------- offline + auto-update (checks every 14 days; manual check in the Share panel) ---------- */
 (()=>{
-  const bar=$('update-bar'),msg=bar.querySelector('span'),go=$('update-go'),btn=$('update-check'),EVERY=14*864e5,KEY='saf-lastcheck';
+  const bar=$('update-bar'),msg=bar.querySelector('span'),go=$('update-go'),btn=$('update-check'),st=$('update-status'),EVERY=14*864e5,KEY='saf-lastcheck';
   const last=()=>{try{return +localStorage.getItem(KEY)||0}catch(e){return 0}},mark=()=>{try{localStorage.setItem(KEY,Date.now())}catch(e){}};
-  const stamp=()=>{const t=last();$('update-when').textContent=t?'Last checked '+new Date(t).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}):'Not checked yet'};
+  const stamp=()=>{const t=last();$('update-when').textContent=t?'last checked '+new Date(t).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}):'not checked yet'};
+  const say=(t,c)=>{st.textContent=t;st.className=c||''};
   stamp();
-  if(!('serviceWorker' in navigator)||(location.protocol!=='https:'&&location.hostname!=='localhost')){btn.hidden=true;return}
+  if(!('serviceWorker' in navigator)||(location.protocol!=='https:'&&location.hostname!=='localhost')){btn.onclick=()=>say('Update needs the app online and installed.','err');return}
   let manual=false;
-  const check=m=>{manual=m;if(m)btn.textContent='Checking…';
+  const check=m=>{manual=m;if(m)say('Checking…');
     navigator.serviceWorker.ready.then(r=>{(navigator.serviceWorker.controller||r.active).postMessage({type:'check',url:location.href.split('#')[0].split('?')[0]});r.update().catch(()=>{})})};
-  navigator.serviceWorker.register('sw.js').then(()=>{if(Date.now()-last()>=EVERY)check(false)}).catch(()=>{btn.hidden=true});
+  navigator.serviceWorker.register('sw.js').then(()=>{if(Date.now()-last()>=EVERY)check(false)}).catch(()=>{});
   navigator.serviceWorker.addEventListener('message',e=>{const t=e.data&&e.data.type;if(!t)return;
-    btn.textContent='Check for updates';
-    if(t==='error'){if(manual){btn.textContent='No connection, try later'}return}
+    if(t==='error'){if(manual)say('No connection. Try again with signal.','err');return}
     mark();stamp();
-    if(t==='current'){if(manual)btn.textContent='Up to date';return}
+    if(t==='current'){if(manual)say('You\u2019re on the latest version.','ok');return}
     if(t==='updated'){
-      if(!S.live&&!S.frozen){location.reload();return}
+      if(manual||(!S.live&&!S.frozen)){if(manual)say('Updated \u2014 reloading\u2026','ok');setTimeout(()=>location.reload(),manual?900:0);return}
       msg.textContent='Update downloaded. It applies next time you open the app.';bar.hidden=false}});
   btn.onclick=()=>check(true);
   go.onclick=()=>location.reload();
