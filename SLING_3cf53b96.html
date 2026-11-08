@@ -70,7 +70,7 @@ button:focus-visible,input:focus-visible,label.btn:focus-within{outline:3px soli
 .status .txt{color:var(--ink);font-weight:500}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:13px;display:flex;flex-direction:column;gap:11px}
 .row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
-label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+label.f,div.f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 input[type=number]{font:700 20px var(--mono);width:120px;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .presets{display:flex;gap:6px;flex-wrap:wrap}
 .pre{font:500 13px var(--mono);padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
@@ -114,6 +114,10 @@ tr.limit td{border-bottom:2px solid var(--bad)}
 #update-bar button{background:var(--accent-ink);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:700 14px var(--body);cursor:pointer}
 .ver{font:12px var(--mono);color:var(--muted);margin:0}
 body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
+.stepper{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:8px;overflow:hidden}
+.stepper button{width:44px;height:44px;border:0;background:var(--bg);color:var(--ink);font:700 22px var(--body);cursor:pointer}
+.stepper button:disabled{opacity:.35;cursor:default}
+.stepper output{min-width:40px;text-align:center;font:700 20px var(--mono);color:var(--ink)}
 [hidden]{display:none!important}
 .top h1{order:1}.top .seg{order:3}
 </style>
@@ -158,6 +162,13 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
       <label class="f" id="loadLbl">Rescue load (kg)<input type="number" id="load" min="0" step="any" inputmode="decimal"></label>
       <div class="presets" id="presets"></div>
     </div>
+    <div class="row" id="anchorRow">
+      <div class="f">Anchors<div class="stepper"><button type="button" id="aMinus" aria-label="Remove anchor">−</button><output id="aCount">2</output><button type="button" id="aPlus" aria-label="Add anchor">+</button></div></div>
+      <div class="seg" id="shareSeg" role="group" aria-label="How the legs share the load">
+        <button type="button" id="sh-fixed" aria-pressed="true">Fixed · worst case</button>
+        <button type="button" id="sh-equal" aria-pressed="false">Self-equalising</button>
+      </div>
+    </div>
     <div class="row">
       <label class="f" id="angLbl">Set internal angle<input type="number" id="angIn" min="0" max="178" step="1" inputmode="numeric" value="120"></label>
       <button class="btn" id="angGo">Apply °</button>
@@ -185,7 +196,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.08 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08.2 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -196,10 +207,10 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
 (()=>{
 const G=0.00980665, $=id=>document.getElementById(id);
 const stage=$('stage'),vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
-const S={auto:null,mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
-  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}}};
-try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode}catch(e){}
-const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode}))}catch(e){}};
+const S={auto:null,nA:2,share:'fixed',mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
+  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62],C:[.38,.1],D:[.62,.1]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}}};
+try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode;if(s.nA>=2&&s.nA<=4)S.nA=s.nA;if(s.share==='equal')S.share='equal'}catch(e){}
+const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode,nA:S.nA,share:S.share}))}catch(e){}};
 
 let CW=0,CH=0,drag=null;
 function size(){const r=stage.getBoundingClientRect(),d=window.devicePixelRatio||1;CW=r.width;CH=r.height;
@@ -241,10 +252,19 @@ function compute(){
   const rot=v=>v;
   let qa=rot([ax,ay]),qb=rot([bx,by]);
   if(S.mode==='track'){const den=qa[1]+qb[1],valid=den>0.01,T=valid?Wn/den:NaN;return {ax,ay,bx,by,th,Wn,T,valid,ratio:T/Wn}}
-  const D=qa[0]*qb[1]-qb[0]*qa[1];let TA=NaN,TB=NaN,valid=Math.abs(D)>1e-6;
-  if(valid){TA=-Wn*qb[0]/D;TB=Wn*qa[0]/D;valid=TA>=0&&TB>=0}
-  return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN};
+  const pair=(u,v)=>{const D=u[0]*v[1]-v[0]*u[1];if(Math.abs(D)<1e-6)return null;const t1=-Wn*v[0]/D,t2=Wn*u[0]/D;return t1>=0&&t2>=0?[t1,t2]:null};
+  if(S.nA<=2){const t=pair(qa,qb),valid=!!t,TA=t?t[0]:NaN,TB=t?t[1]:NaN;
+    return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN,legs:[{k:'A',T:TA},{k:'B',T:TB}]}}
+  // 3-4 anchors
+  const keys=ANCHORS.slice(0,S.nA),U=keys.map(k=>{const [x,y]=px(p[k]);let ux=x-Px,uy=-(y-Py);const l=Math.hypot(ux,uy)||1;return [ux/l,uy/l]});
+  let oi=0,oj=1,om=-1;for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=Math.acos(Math.max(-1,Math.min(1,U[i][0]*U[j][0]+U[i][1]*U[j][1])))*180/Math.PI;if(a>om){om=a;oi=i;oj=j}}
+  let T=U.map(()=>0),valid=false;
+  if(S.share==='equal'){const sy=U.reduce((a,u)=>a+u[1],0);valid=sy>.01&&U.every(u=>u[1]>-.01);T=U.map(()=>valid?Wn/sy:NaN)}
+  else{for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const t=pair(U[i],U[j]);if(t){valid=true;T[i]=Math.max(T[i],t[0]);T[j]=Math.max(T[j],t[1])}}
+    if(!valid)T=T.map(()=>NaN)}
+  return {ax:U[oi][0],ay:U[oi][1],bx:U[oj][0],by:U[oj][1],th:om,Wn,valid,worst:valid?Math.max(...T)/Wn:NaN,legs:keys.map((k,i)=>({k,T:T[i]})),multi:true};
 }
+const ANCHORS=['A','B','C','D'];
 const kg=v=>isFinite(v)?Math.round(v/G).toLocaleString():'—';
 const kn=v=>isFinite(v)?v.toFixed(2)+' kN':'';
 
@@ -255,9 +275,9 @@ function frame(){
   ctx.clearRect(0,0,CW,CH);
   if(S.frozen){const r=imgRect();ctx.fillStyle='#000';ctx.fillRect(0,0,CW,CH);ctx.drawImage(S.frozen,r.x,r.y,S.frozen.width*r.s,S.frozen.height*r.s)}
   if(!S.live&&!S.frozen){requestAnimationFrame(frame);return}
-  const r=compute(),p=S.pts[S.mode],P=px(p.P),A=px(p.A),B=px(p.B),C=null,rope='#f26a2e';
+  const r=compute(),p=S.pts[S.mode],P=px(p.P),A=px(p.A),B=px(p.B),C=null,rope='#f26a2e',EX=S.mode==='sling'?ANCHORS.slice(2,S.nA).map(k=>[k,px(p[k])]):[];
   ctx.lineCap='round';
-  for(const Q of [A,B]){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ln(P,Q);ctx.strokeStyle=rope;ctx.lineWidth=4;ln(P,Q)}
+  for(const Q of [A,B,...EX.map(e=>e[1])]){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ln(P,Q);ctx.strokeStyle=rope;ctx.lineWidth=4;ln(P,Q)}
   {let bx=r.ax+r.bx,by=-(r.ay+r.by);const bl=Math.hypot(bx,by);if(bl>1e-3){bx/=bl;by/=bl;const L=Math.max(CW,CH);ctx.setLineDash([7,7]);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,.85)';ln([P[0]-bx*L,P[1]-by*L],[P[0]+bx*L,P[1]+by*L]);ctx.setLineDash([])}}
   if(C){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=6;ln(P,C);ctx.strokeStyle='#4c8dff';ctx.lineWidth=3;ln(P,C)}
   const a1=Math.atan2(-r.ay,r.ax),a2=Math.atan2(-r.by,r.bx);let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
@@ -267,16 +287,20 @@ function frame(){
   LQ=[];
   const near=(Q,t)=>{const dx=Q[0]-P[0],dy=Q[1]-P[1],l=Math.hypot(dx,dy)||1;let x=Q[0]+dx/l*44,y=Q[1]+dy/l*44;
     ctx.font='700 12px JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12;
-    if(x-w/2<2||x+w/2>CW-2||y<12||y>CH-12){x=Q[0];y=Q[1]>40?Q[1]-32:Q[1]+32}
-    label(x,y,t)};
+    if(x-w/2<2||x+w/2>CW-2||y<56||y>CH-12){x=Q[0]+(dx>=0?1:-1)*(w/2+20);y=Q[1];
+      if(x-w/2<2||x+w/2>CW-2){x=Q[0];y=Q[1]>70?Q[1]-32:Q[1]+32}}
+    x=Math.max(w/2+2,Math.min(CW-w/2-2,x));
+    for(let k=0;k<8&&PL.some(b=>Math.abs(b[0]-x)<(b[2]+w)/2+4&&Math.abs(b[1]-y)<24);k++)y+=(y>Q[1]?1:-1)*24;
+    PL.push([x,y,w]);label(x,y,t)};
+  const PL=[];
   if(S.mode!=='edge'){arrow(P,[P[0],P[1]+62],'#e6edf4',kg(r.Wn)+' kg');
-    if(r.valid){if(S.mode==='sling'){near(A,'Anchor · '+kg(r.TA)+' kg');near(B,'Anchor · '+kg(r.TB)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
+    if(r.valid){if(S.mode==='sling'){const pre=r.multi?(S.share==='fixed'?'≤ ':''):'Anchor · ',QQ={A,B,...Object.fromEntries(EX)};for(const g of r.legs)near(QQ[g.k],pre+kg(g.T)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
   else{near(A,'Anchor');
     {let dx=B[0]-P[0],dy=B[1]-P[1];const l=Math.hypot(dx,dy)||1;dx/=l;dy/=l;let len=64;
      const room=(c,d,max)=>d>0?(max-14-c)/d:d<0?(c-14)/-d:1e9;len=Math.max(24,Math.min(len,room(B[0],dx,CW),room(B[1],dy,CH)));
      arrow(B,[B[0]+dx*len,B[1]+dy*len],'#e6edf4',kg(r.Wn)+' kg')}
     let ux=r.ax+r.bx,uy=-(r.ay+r.by);const l=Math.hypot(ux,uy);if(l>1e-3)arrow(P,[P[0]-ux/l*70,P[1]-uy/l*70],'#ff6b6b',kg(r.R)+' kg')}
-  for(const [k,Q] of [['A',A],['B',B],...(C?[['C',C]]:[]),['P',P]]){ctx.fillStyle=k==='P'?rope:k==='C'?'#2f6fe0':'#132030';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
+  for(const [k,Q] of [['A',A],['B',B],...EX,['P',P]]){ctx.fillStyle=k==='P'?rope:'#132030';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
     ctx.beginPath();ctx.arc(Q[0],Q[1],14,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='700 13px '+getComputedStyle(document.body).getPropertyValue('--mono');
     ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(k==='P'?(S.mode==='edge'?'E':'L'):k,Q[0],Q[1]+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
   const q=LQ;LQ=null;for(const a of q)label(...a);
@@ -312,12 +336,14 @@ const cell=(l,v,s,k)=>`<div class="cell"><div class="lbl">${l}</div><div class="
 function render(r){
   let h,c,t;
   if(S.mode==='sling'){
-    h=cell('Internal',r.th.toFixed(0)+'°','',band(r))+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
-     +cell('Leg B',r.valid?kg(r.TB):'—','kg · '+(r.valid?kn(r.TB):''))+cell('Worst leg',r.valid?Math.round(r.worst*100)+'%':'—','of load');
-    if(!r.valid){c='bad';t='<span>Not in balance.</span><span class="txt">Both legs sit on one side of the load or point down. It would swing. Re-check the points.</span>'}
-    else if(r.worst<=0.7072){c='ok';t='<span>Good.</span><span class="txt">Each anchor carries 71% of the load or less (90° internal or narrower).</span>'}
-    else if(r.worst<=1.0001){c='warn';t='<span>Caution.</span><span class="txt">An anchor carries 71–100% of the load. Narrow the angle if you can.</span>'}
-    else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load, past 120° internal. Narrow the angle.</span>`}
+    h=cell('Internal',r.th.toFixed(0)+'°',r.multi?'outer legs':'',band(r))
+     +r.legs.map(g=>cell('Anchor '+g.k,r.valid?kg(g.T):'—','kg · '+(r.valid?kn(g.T):'')+(r.multi&&S.share==='fixed'?' max':''))).join('')
+     +cell('Worst anchor',r.valid?Math.round(r.worst*100)+'%':'—','of load');
+    const how=!r.multi?'':S.share==='fixed'?' Fixed legs: worst case, where any two legs take the whole load.':' Self-equalising: every leg carries the same load.';
+    if(!r.valid){c='bad';t=`<span>Not in balance.</span><span class="txt">${r.multi?'The legs can\'t hold the load from these directions.':'Both legs sit on one side of the load or point down. It would swing.'} Re-check the points.</span>`}
+    else if(r.worst<=0.7072){c='ok';t=`<span>Good.</span><span class="txt">Each anchor carries 71% of the load or less.${how}</span>`}
+    else if(r.worst<=1.0001){c='warn';t=`<span>Caution.</span><span class="txt">An anchor carries 71–100% of the load. Narrow the angle if you can.${how}</span>`}
+    else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load. Narrow the angle.${how}</span>`}
   }else if(S.mode==='track'){
     h=cell('Internal',r.th.toFixed(0)+'°','track line at load',band(r))+cell('Anchor A',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))
      +cell('Anchor B',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))+cell('Anchor × load',r.valid?r.ratio.toFixed(2)+'×':'—','tension ÷ load');
@@ -413,7 +439,7 @@ function autoLock(){
   const tip=a=>{for(let s=a.end*.92;s>0;s-=1){const q=toN(v.P[0]+a.dir[0]*s,v.P[1]+a.dir[1]*s);if(inV(q))return q}return null};
   let A=tip(v.A),B=tip(v.B);if(!A||!B){S.auto='fail';return false}
   if(S.mode==='track'?A[1]>B[1]:A[0]>B[0])[A,B]=[B,A];
-  S.pts[S.mode]={...S.pts[S.mode],P,A,B};S.auto='ok';lastHTML='';return true;
+  S.pts[S.mode]={...S.pts[S.mode],P,A,B};if(S.mode==='sling')for(const k of ANCHORS.slice(2,S.nA))placeExtra(k);S.auto='ok';lastHTML='';return true;
 }
 let lastChips='';
 function chips(){
@@ -428,7 +454,7 @@ function chips(){
 /* ---------- input ---------- */
 function evPt(e){const b=cv.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]}
 cv.addEventListener('pointerdown',e=>{if(!S.live&&!S.frozen)return;const [x,y]=evPt(e),p=S.pts[S.mode];let best=null,bd=1e9;
-  for(const k of ['P','A','B']){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}
+  for(const k of (S.mode==='sling'?['P',...ANCHORS.slice(0,S.nA)]:['P','A','B'])){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}
   if(bd<44){drag=best;if(S.auto)S.auto='adj';cv.setPointerCapture(e.pointerId);e.preventDefault()}});
 cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);S.pts[S.mode][drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
 const end=()=>{drag=null};
@@ -439,13 +465,19 @@ const loadIn=$('load');
 function syncUI(){
   $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
   $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];
-  $('modeHint').textContent=({sling:'L on the load or apex, A and B up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('modeHint').textContent=({sling:'L on the load or apex, A and B (and C, D if added) up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('anchorRow').hidden=S.mode!=='sling';$('aCount').value=S.nA;$('aCount').textContent=S.nA;$('aMinus').disabled=S.nA<=2;$('aPlus').disabled=S.nA>=4;
+  $('shareSeg').hidden=S.nA<3;$('sh-fixed').setAttribute('aria-pressed',S.share==='fixed');$('sh-equal').setAttribute('aria-pressed',S.share==='equal');
   $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
   $('refNote').textContent=({sling:'Red rule marks 120° internal: each leg carries 100% of the load.',edge:'Red rule marks 120° internal: the anchor takes the full load. At 0° (rope doubled back) it takes double.',track:'Assumes the load sits at the low point with equal angles each side. Use the live readout for other positions.'})[S.mode];
   
   const pr=S.mode==='sling'?[['1 person · 100 kg',100],['2 person · 200 kg',200],['Rescue load · 250 kg',250]]:[['1 person · 100 kg',100],['2 person · 200 kg',200],['Rescue load · 250 kg',250]];
   $('presets').innerHTML=pr.map(([l,v])=>`<button class="pre" data-v="${v}">${l}</button>`).join('');lastHTML='';
 }
+function placeExtra(k){const pt=S.pts.sling,a=pt.A,b=pt.B;pt[k]=[Math.max(.06,Math.min(.94,(a[0]+b[0])/2+(k==='D'?.1:-.1))),Math.max(.15,Math.min(a[1],b[1])-.17)]}
+$('aPlus').onclick=()=>{if(S.nA<4){S.nA++;placeExtra(ANCHORS[S.nA-1]);save();syncUI()}};
+$('aMinus').onclick=()=>{if(S.nA>2){S.nA--;save();syncUI()}};
+$('sh-fixed').onclick=()=>{S.share='fixed';save();syncUI()};$('sh-equal').onclick=()=>{S.share='equal';save();syncUI()};
 $('presets').addEventListener('click',e=>{const b=e.target.closest('.pre');if(!b)return;S.load[S.mode]=+b.dataset.v;save();syncUI()});
 loadIn.addEventListener('input',()=>{const v=parseFloat(loadIn.value);if(isFinite(v)&&v>=0){S.load[S.mode]=v;save();lastHTML=''}});
 $('m-sling').onclick=()=>{S.mode='sling';save();syncUI();if(S.frozen)autoLock()};$('m-edge').onclick=()=>{S.mode='edge';save();syncUI();if(S.frozen)autoLock()};$('m-track').onclick=()=>{S.mode='track';save();syncUI();if(S.frozen)autoLock()};
