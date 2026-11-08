@@ -185,7 +185,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.06.2 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -261,9 +261,9 @@ function frame(){
   {let bx=r.ax+r.bx,by=-(r.ay+r.by);const bl=Math.hypot(bx,by);if(bl>1e-3){bx/=bl;by/=bl;const L=Math.max(CW,CH);ctx.setLineDash([7,7]);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,.85)';ln([P[0]-bx*L,P[1]-by*L],[P[0]+bx*L,P[1]+by*L]);ctx.setLineDash([])}}
   if(C){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=6;ln(P,C);ctx.strokeStyle='#4c8dff';ctx.lineWidth=3;ln(P,C)}
   const a1=Math.atan2(-r.ay,r.ax),a2=Math.atan2(-r.by,r.bx);let d=a2-a1;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
-  const bc=BAND_COL[band(r)];let S0=a1;ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
+  const bc=BAND_COL[band(r)]||'#fff';let S0=a1;ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
   ctx.strokeStyle=bc;ctx.lineWidth=4;ctx.beginPath();ctx.arc(P[0],P[1],36,S0,S0+d,d<0);ctx.stroke();
-  const mid=S0+d/2;label(P[0]+Math.cos(mid)*60,P[1]+Math.sin(mid)*60,r.th.toFixed(0)+'°',true,bc);
+  const mid=S0+d/2;label(P[0]+Math.cos(mid)*60,P[1]+Math.sin(mid)*60,r.th.toFixed(0)+'°',true,band(r)?bc:null);
   LQ=[];
   const near=(Q,t)=>{const dx=Q[0]-P[0],dy=Q[1]-P[1],l=Math.hypot(dx,dy)||1;let x=Q[0]+dx/l*44,y=Q[1]+dy/l*44;
     ctx.font='700 12px JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12;
@@ -286,8 +286,11 @@ function frame(){
 function ln(a,b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
 let LQ=null;
 const BAND_COL={ok:'#5fc470',warn:'#f5d33a',bad:'#ff5a5a'};
-/* green: anchor load at or under the actual load; yellow: up to double; red: more than double */
-function band(r){if(r.valid===false)return 'bad';const k=S.mode==='sling'?r.worst:S.mode==='track'?r.ratio:r.R/r.Wn;return !isFinite(k)?'bad':k<=1.0001?'ok':k<=2.0001?'warn':'bad'}
+/* Sling: green <=90deg internal (each leg <=71%), yellow 90-120deg (<=100%), red >120deg.
+   Deflection: green anchors <=1x load, yellow <=2x, red >2x.  Redirection: not graded (tight redirects are normal). */
+function band(r){if(S.mode==='edge')return null;if(r.valid===false)return 'bad';
+  const k=S.mode==='sling'?r.worst:r.ratio;if(!isFinite(k))return 'bad';
+  return S.mode==='sling'?(k<=0.7072?'ok':k<=1.0001?'warn':'bad'):(k<=1.0001?'ok':k<=2.0001?'warn':'bad')}
 function label(x,y,t,big,col){if(LQ){LQ.push([x,y,t,big,col]);return}ctx.font=(big?'700 16px ':'700 12px ')+'JetBrains Mono,ui-monospace,monospace';const w=ctx.measureText(t).width+12,h=big?24:20;
   x=Math.max(w/2+2,Math.min(CW-w/2-2,x));y=Math.max(h/2+2,Math.min(CH-h/2-2,y));
   ctx.fillStyle=col||'rgba(15,23,32,.88)';ctx.beginPath();ctx.roundRect?ctx.roundRect(x-w/2,y-h/2,w,h,5):ctx.rect(x-w/2,y-h/2,w,h);ctx.fill();
@@ -312,9 +315,9 @@ function render(r){
     h=cell('Internal',r.th.toFixed(0)+'°','',band(r))+cell('Leg A',r.valid?kg(r.TA):'—','kg · '+(r.valid?kn(r.TA):''))
      +cell('Leg B',r.valid?kg(r.TB):'—','kg · '+(r.valid?kn(r.TB):''))+cell('Worst leg',r.valid?Math.round(r.worst*100)+'%':'—','of load');
     if(!r.valid){c='bad';t='<span>Not in balance.</span><span class="txt">Both legs sit on one side of the load or point down. It would swing. Re-check the points.</span>'}
-    else if(r.worst<=1.0001){c='ok';t='<span>Good.</span><span class="txt">Each anchor carries no more than the load.</span>'}
-    else if(r.worst<=2.0001){c='warn';t=`<span>Caution.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load. Narrow the angle if you can.</span>`}
-    else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load, more than double. Narrow the angle.</span>`}
+    else if(r.worst<=0.7072){c='ok';t='<span>Good.</span><span class="txt">Each anchor carries 71% of the load or less (90° internal or narrower).</span>'}
+    else if(r.worst<=1.0001){c='warn';t='<span>Caution.</span><span class="txt">An anchor carries 71–100% of the load. Narrow the angle if you can.</span>'}
+    else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load, past 120° internal. Narrow the angle.</span>`}
   }else if(S.mode==='track'){
     h=cell('Internal',r.th.toFixed(0)+'°','track line at load',band(r))+cell('Anchor A',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))
      +cell('Anchor B',r.valid?kg(r.T):'—','kg · '+(r.valid?kn(r.T):''))+cell('Anchor × load',r.valid?r.ratio.toFixed(2)+'×':'—','tension ÷ load');
@@ -325,8 +328,7 @@ function render(r){
   }else{
     h=cell('Internal angle',r.th.toFixed(0)+'°',(180-r.th).toFixed(0)+'° change of direction',band(r))+cell('Load on rope',kg(r.Wn),'kg · '+kn(r.Wn))
      +cell('Anchor load',kg(r.R),'kg · '+kn(r.R))+cell('Multiplier',(r.R/r.Wn).toFixed(2)+'×','of the load');
-    {const k=r.R/r.Wn;c=band(r);t=c==='ok'?'<span>Good.</span><span class="txt">The redirection anchor carries no more than the load (120° internal or wider).</span>'
-      :`<span>${c==='bad'?'Over limit.':'Caution.'}</span><span class="txt">The redirection anchor carries ${k.toFixed(2)}× the load. It reaches double when the rope doubles straight back.</span>`}
+    c='info';t='<span>Redirection anchor.</span><span class="txt">The red arrow shows the load on the redirection anchor. At 120° internal it takes the full load; at 0° (rope doubled back) it takes double. Check the anchor is rated for it.</span>';
   }
   const all=h+'|'+c+t;if(all===lastHTML)return;lastHTML=all;ro.innerHTML=h;st.className='status '+c;st.innerHTML=t;table(r);
 }
