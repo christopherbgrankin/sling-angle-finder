@@ -40,7 +40,7 @@ body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset
 h1{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:.03em;text-transform:uppercase;margin:0;line-height:1}
 h1 span{color:var(--accent)}
 .seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:8px;overflow:hidden}
-.seg button{font:600 12px/1 var(--body);letter-spacing:.06em;text-transform:uppercase;padding:9px 11px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.seg button{font:600 12px/1 var(--body);letter-spacing:.04em;text-transform:uppercase;padding:9px 9px;border:0;background:transparent;color:var(--ink);cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 button:focus-visible,input:focus-visible,label.btn:focus-within{outline:3px solid var(--accent);outline-offset:2px}
 
@@ -127,6 +127,8 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
 .stepper button{width:44px;height:44px;border:0;background:var(--bg);color:var(--ink);font:700 22px var(--body);cursor:pointer}
 .stepper button:disabled{opacity:.35;cursor:default}
 .stepper output{min-width:40px;text-align:center;font:700 20px var(--mono);color:var(--ink)}
+#vxAsm{font:500 14px var(--body);padding:10px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);max-width:100%}
+#vxRow[hidden]{display:none!important}
 [hidden]{display:none!important}
 .top h1{order:1;margin-right:auto}.top .seg{order:3}
 </style>
@@ -141,6 +143,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="m-sling" aria-pressed="true">Sling</button>
     <button id="m-edge" aria-pressed="false">Redirection</button>
     <button id="m-track" aria-pressed="false">Deflection</button>
+    <button id="m-vortex" aria-pressed="false">Vortex</button>
   </div>
 </div>
 
@@ -181,7 +184,12 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
         <button type="button" id="sh-equal" aria-pressed="false">Self-equalising</button>
       </div>
     </div>
-    <div class="row">
+    <div id="vxRow" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div class="seg" id="vxCfg" role="group" aria-label="Vortex configuration"><button type="button" data-c="tripod">Tripod</button><button type="button" data-c="aframe">A-frame</button><button type="button" data-c="easel">Easel tripod</button></div>
+      <div class="seg" id="vxUse" role="group" aria-label="Mode of use"><button type="button" data-u="anchor">Anchor frame</button><button type="button" data-u="dir">Directional frame</button></div>
+      <label class="f">Assembly (sets the WLL)<select id="vxAsm"></select></label>
+    </div>
+    <div class="row" id="angRow">
       <label class="f" id="angLbl">Set internal angle<input type="number" id="angIn" min="0" max="178" step="1" inputmode="numeric" value="120"></label>
       <button class="btn" id="angGo">Apply °</button>
     </div>
@@ -218,7 +226,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.08.6 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08.7 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -229,10 +237,12 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
 (()=>{
 const G=0.00980665, $=id=>document.getElementById(id);
 const stage=$('stage'),vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
-const S={auto:null,ldir:null,nA:2,share:'fixed',mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
-  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62],C:[.38,.1],D:[.62,.1]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}}};
-try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode;if(s.nA>=2&&s.nA<=4)S.nA=s.nA;if(s.share==='equal')S.share='equal'}catch(e){}
-const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode,nA:S.nA,share:S.share}))}catch(e){}};
+const S={auto:null,ldir:null,vx:{cfg:'aframe',use:'dir',asm:{tripod:'t36',aframe:'a36',easel:'e36'}},nA:2,share:'fixed',mode:'sling',load:{sling:250,edge:250,track:250,vortex:250},live:false,frozen:null,fit:'cover',
+  pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62],C:[.38,.1],D:[.62,.1]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]},
+  vx_tripod:{H:[.5,.14],L:[.5,.88],R:[.78,.82]},vx_aframe:{H:[.55,.16],F:[.45,.88],G:[.1,.35],L:[.86,.92],R:[.15,.9]},vx_easel:{H:[.6,.16],F:[.6,.88],E:[.16,.88],L:[.86,.92],R:[.3,.4]}}};
+const VX_OK=v=>v&&['tripod','aframe','easel'].includes(v.cfg)&&['anchor','dir'].includes(v.use)&&v.asm;
+try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode;if(s.nA>=2&&s.nA<=4)S.nA=s.nA;if(s.share==='equal')S.share='equal';if(s.vx&&VX_OK(s.vx))S.vx=s.vx}catch(e){}
+const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode,nA:S.nA,share:S.share,vx:S.vx}))}catch(e){}};
 
 let CW=0,CH=0,drag=null;
 function size(){const r=stage.getBoundingClientRect(),d=window.devicePixelRatio||1;CW=r.width;CH=r.height;
@@ -257,7 +267,7 @@ function freeze(){
   const c=document.createElement('canvas');c.width=vid.videoWidth;c.height=vid.videoHeight;c.getContext('2d').drawImage(vid,0,0);
   S.frozen=c;S.fit='cover';vid.pause();vid.hidden=true;setFreezeBtn();autoLock();
 }
-function setFreezeBtn(){$('relock').hidden=!S.frozen;const b=$('freeze');b.textContent=S.frozen?'Back to live':'Freeze';b.className=S.frozen?'fab ghost':'fab'}
+function setFreezeBtn(){$('relock').hidden=!S.frozen||S.mode==='vortex';const b=$('freeze');b.textContent=S.frozen?'Back to live':'Freeze';b.className=S.frozen?'fab ghost':'fab'}
 $('start').onclick=startCam;$('freeze').onclick=freeze;$('relock').onclick=()=>{autoLock()};
 $('pick').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image();
   im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
@@ -308,6 +318,7 @@ function frame(){
   ctx.clearRect(0,0,CW,CH);
   if(S.frozen){const r=imgRect();ctx.fillStyle='#000';ctx.fillRect(0,0,CW,CH);ctx.drawImage(S.frozen,r.x,r.y,S.frozen.width*r.s,S.frozen.height*r.s)}
   if(!S.live&&!S.frozen){requestAnimationFrame(frame);return}
+  if(S.mode==='vortex'){drawVortex();requestAnimationFrame(frame);return}
   const r=compute(),p=S.pts[S.mode],P=px(p.P),A=px(p.A),B=px(p.B),C=null,rope='#f26a2e',EX=S.mode==='sling'?ANCHORS.slice(2,S.nA).map(k=>[k,px(p[k])]):[];
   ctx.lineCap='round';
   for(const Q of [A,B,...EX.map(e=>e[1])]){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ln(P,Q);ctx.strokeStyle=rope;ctx.lineWidth=4;ln(P,Q)}
@@ -471,7 +482,7 @@ function findV(mask,w,h){
   return best;
 }
 function autoLock(){
-  if(!S.frozen){S.auto=null;return false}
+  if(!S.frozen||S.mode==='vortex'){S.auto=null;return false}
   const {w,h,sc,masks}=ropeMasks(S.frozen);let v=null;
   for(const {m,wt} of masks){if(v&&wt<1)break;const c=findV(m,w,h);if(c&&c.score>=c.diag*.12){if(!v||c.score>v.score)v=c}}
   if(!v){S.auto='fail';return false}
@@ -485,33 +496,36 @@ function autoLock(){
 let lastChips='';
 function chips(){
   let h='';
+  const ax=S.mode!=='vortex';
   if(S.frozen&&S.fit==='contain')h+='<span class="chip">Photo</span>';
   if(S.frozen&&S.live)h+='<span class="chip">Frozen</span>';
-  if(S.frozen&&S.auto==='ok')h+='<span class="chip ok">Auto-locked · drag to adjust</span>';
-  if(S.frozen&&S.auto==='fail')h+='<span class="chip warn">Ropes not found · drag the points</span>';
+  if(ax&&S.frozen&&S.auto==='ok')h+='<span class="chip ok">Auto-locked · drag to adjust</span>';
+  if(ax&&S.frozen&&S.auto==='fail')h+='<span class="chip warn">Ropes not found · drag the points</span>';
   if(h!==lastChips){$('chips').innerHTML=h;lastChips=h}
 }
 
 /* ---------- input ---------- */
 function evPt(e){const b=cv.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]}
-cv.addEventListener('pointerdown',e=>{if(!S.live&&!S.frozen)return;const [x,y]=evPt(e),p=S.pts[S.mode];let best=null,bd=1e9;
+cv.addEventListener('pointerdown',e=>{if(!S.live&&!S.frozen)return;const [x,y]=evPt(e),p=S.mode==='vortex'?vxPts():S.pts[S.mode];let best=null,bd=1e9;
+  if(S.mode==='vortex'){for(const k of vxKeys()){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}if(bd<44){drag=best;cv.setPointerCapture(e.pointerId);e.preventDefault()}return}
   for(const k of (S.mode==='sling'?['P',...ANCHORS.slice(0,S.nA)]:['P','A','B'])){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}
   if(S.mode==='sling'){const [wx,wy]=wPos(px(p.P),compute());const d=Math.hypot(wx-x,wy-y);if(d<bd){bd=d;best='W'}}
   if(bd<44){drag=best;if(S.auto)S.auto='adj';cv.setPointerCapture(e.pointerId);e.preventDefault()}});
-cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);if(drag==='W'){const [qx,qy]=px(S.pts.sling.P);const l=Math.hypot(x-qx,y-qy);if(l>8){S.ldir=[(x-qx)/l,(y-qy)/l];updLdir()}return}S.pts[S.mode][drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);if(drag==='W'){const [qx,qy]=px(S.pts.sling.P);const l=Math.hypot(x-qx,y-qy);if(l>8){S.ldir=[(x-qx)/l,(y-qy)/l];updLdir()}return}(S.mode==='vortex'?vxPts():S.pts[S.mode])[drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
 const end=()=>{drag=null};
 for(const ev of ['touchstart','touchmove'])cv.addEventListener(ev,e=>{if(S.live||S.frozen)e.preventDefault()},{passive:false});
 cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
 
 const loadIn=$('load');
 function syncUI(){
-  $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
+  $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');$('m-vortex').setAttribute('aria-pressed',S.mode==='vortex');
   $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];
-  $('modeHint').textContent=({sling:'L on the master point, A and B (and C, D if added) up each anchor leg. W is the load direction: it follows the dashed split line until you drag it. Tap ? for a diagram.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('modeHint').textContent=S.mode==='vortex'?VX_HINT[S.vx.cfg]+(S.vx.use==='dir'?' R up the rope towards the haul.':''):({sling:'L on the master point, A and B (and C, D if added) up each anchor leg. W is the load direction: it follows the dashed split line until you drag it. Tap ? for a diagram.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  vxSync();$('angRow').hidden=S.mode==='vortex';if(S.frozen)setFreezeBtn();if(S.mode==='vortex'&&!S.live)$('relock').hidden=true;
   $('anchorRow').hidden=S.mode!=='sling';$('aCount').value=S.nA;$('aCount').textContent=S.nA;$('aMinus').disabled=S.nA<=2;$('aPlus').disabled=S.nA>=4;
   $('shareSeg').hidden=S.nA<3;$('sh-fixed').setAttribute('aria-pressed',S.share==='fixed');$('sh-equal').setAttribute('aria-pressed',S.share==='equal');
-  $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
-  $('refNote').textContent=({sling:'Red rule marks 120° internal: each leg carries 100% of the load.',edge:'Red rule marks 120° internal: the anchor takes the full load. At 0° (rope doubled back) it takes double.',track:'Assumes the load sits at the low point with equal angles each side. Use the live readout for other positions.'})[S.mode];
+  $('refTitle').textContent=({vortex:'Vortex strength ratings (manual p.31)',sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
+  $('refNote').textContent=({vortex:'WLL is the manual’s MBS ÷ 4, compared against the applied force on the frame. Gin pole shown for reference only.',sling:'Red rule marks 120° internal: each leg carries 100% of the load.',edge:'Red rule marks 120° internal: the anchor takes the full load. At 0° (rope doubled back) it takes double.',track:'Assumes the load sits at the low point with equal angles each side. Use the live readout for other positions.'})[S.mode];
   
   const pr=S.mode==='sling'?[['1 person · 100 kg',100],['2 person · 200 kg',200],['Rescue load · 250 kg',250]]:[['1 person · 100 kg',100],['2 person · 200 kg',200],['Rescue load · 250 kg',250]];
   $('presets').innerHTML=pr.map(([l,v])=>`<button class="pre" data-v="${v}">${l}</button>`).join('');lastHTML='';
@@ -569,6 +583,18 @@ $('share-modal').addEventListener('click',e=>{if(e.target.id==='share-modal')clo
 
 /* ---------- help ---------- */
 const HELP={
+ vortex:{t:'Vortex: frame loads and guy check',
+  svg:`<svg viewBox="0 0 320 200" font-family="JetBrains Mono,monospace" font-size="12"><rect x="0" y="186" width="230" height="14" fill="#3a4757"/>
+   <line x1="150" y1="30" x2="130" y2="186" stroke="#c9d3de" stroke-width="7"/><line x1="150" y1="30" x2="20" y2="150" stroke="#4c8dff" stroke-width="3"/>
+   <line x1="150" y1="30" x2="300" y2="196" stroke="#f26a2e" stroke-width="4"/><line x1="150" y1="30" x2="60" y2="90" stroke="#f26a2e" stroke-width="4"/>
+   <line x1="150" y1="30" x2="196" y2="128" stroke="#ff5a5a" stroke-width="4"/><path d="M188 126 L200 138 L203 121Z" fill="#ff5a5a"/><text x="206" y="120" fill="#ff5a5a">applied</text>
+   <circle cx="150" cy="30" r="12" fill="#f26a2e" stroke="#fff" stroke-width="2"/><text x="150" y="34" fill="#fff" text-anchor="middle">H</text>
+   <circle cx="132" cy="172" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="132" y="176" fill="#fff" text-anchor="middle">F</text>
+   <circle cx="30" cy="141" r="12" fill="#2f6fe0" stroke="#fff" stroke-width="2"/><text x="30" y="145" fill="#fff" text-anchor="middle">G</text>
+   <circle cx="285" cy="178" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="285" y="182" fill="#fff" text-anchor="middle">L</text>
+   <circle cx="72" cy="82" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="72" y="86" fill="#fff" text-anchor="middle">R</text></svg>`,
+  steps:['Pick the configuration, the assembly you built (it sets the WLL), and Anchor or Directional frame.','Photograph the frame <b>side-on</b>. Put <b>H</b> on the head and <b>L</b> down the load line; for a directional frame put <b>R</b> down the haul line.','A-frame: <b>F</b> on the feet and <b>G</b> up the back guy. Easel: <b>F</b> on the A-frame feet and <b>E</b> on the easel foot.','Read the applied force against the WLL, the guy angle rules (≥30°, ideally ≥45°, and ≥ the applied force angle), and the guy and leg loads.'],
+  note:'From the CMC Arizona Vortex user manual: WLL = MBS ÷ 4; only the equal-leg tripod is EN certified. Not a substitute for Vortex training.'},
  sling:{t:'Sling: load on each anchor',
   svg:`<svg viewBox="0 0 320 200" font-family="JetBrains Mono,monospace" font-size="12"><rect x="10" y="14" width="300" height="10" fill="#3a4757"/>
    <line x1="70" y1="30" x2="160" y2="120" stroke="#f26a2e" stroke-width="5"/><line x1="250" y1="30" x2="160" y2="120" stroke="#f26a2e" stroke-width="5"/>
@@ -600,9 +626,116 @@ const HELP={
    <circle cx="170" cy="110" r="12" fill="#f26a2e" stroke="#fff" stroke-width="2"/><text x="170" y="114" fill="#fff" text-anchor="middle">L</text></svg>`,
   steps:['Put <b>L</b> on the load pulley on the track line.','Put <b>A</b> up the line towards the top anchor.','Put <b>B</b> down the line towards the bottom anchor (the appliance).','Both anchors carry the same load. Check it at the flattest point the load will reach.'],
   note:'Hold the phone level and side-on: this mode uses straight down for the load. Flat lines give big numbers from small angle errors.'}};
-function openHelp(){const h=HELP[S.mode];$('help-title').textContent=h.t;$('help-svg').innerHTML=h.svg;$('help-steps').innerHTML=h.steps.map(x=>`<li>${x}</li>`).join('');$('help-note').textContent=h.note;$('help-modal').hidden=false}
+function openHelp(){const h=HELP[S.mode]||HELP.vortex;$('help-title').textContent=h.t;$('help-svg').innerHTML=h.svg;$('help-steps').innerHTML=h.steps.map(x=>`<li>${x}</li>`).join('');$('help-note').textContent=h.note;$('help-modal').hidden=false}
 $('help-btn').onclick=openHelp;$('help-close').onclick=()=>{$('help-modal').hidden=true};
 $('help-modal').addEventListener('click',e=>{if(e.target.id==='help-modal')$('help-modal').hidden=true});
+/* ---------- Arizona Vortex (CMC/Rock Exotica user manual 727300) ---------- */
+/* Ratings: manual p.31 strength table (WLL = MBS / 4) and p.5 certified Easel A-Frame (MBS 36 kN).
+   Applied force: p.17. Anchor frame = the load, along the load line. Directional frame = load x pulley factor, along the bisector.
+   Guy rule: p.21. Guy angle >= 30 deg (ideally >= 45 deg) and >= the applied force angle. */
+const VX_ASM={
+  tripod:[{id:'t36',label:'2 outer + 1 inner leg, head ≤ 241 cm',mbs:36},{id:'t22',label:'3 outer + 1 inner leg, head ≤ 320 cm',mbs:22}],
+  aframe:[{id:'a36',label:'2 outer + 1 inner leg, head ≤ 241 cm',mbs:36},{id:'a22',label:'3 outer + 1 inner leg, head ≤ 305 cm',mbs:22}],
+  easel:[{id:'e36',label:'Certified easel A-frame (A-frame ≤ 2.6 m, easel leg ≤ 3.0 m)',mbs:36}]};
+const VX_KEYS={tripod:['H','L','R'],aframe:['H','F','G','L','R'],easel:['H','F','E','L','R']};
+const VX_NAME={tripod:'Tripod',aframe:'A-frame',easel:'Easel tripod'};
+const vxPts=()=>S.pts['vx_'+S.vx.cfg];
+const vxKeys=()=>VX_KEYS[S.vx.cfg].filter(k=>k!=='R'||S.vx.use==='dir');
+const vxAsm=()=>VX_ASM[S.vx.cfg].find(a=>a.id===S.vx.asm[S.vx.cfg])||VX_ASM[S.vx.cfg][0];
+const vu=(a,b)=>{const x=b[0]-a[0],y=-(b[1]-a[1]),l=Math.hypot(x,y)||1;return [x/l,y/l]};   // unit vector a->b, maths axes (y up)
+const vang=(u,v)=>Math.acos(Math.max(-1,Math.min(1,u[0]*v[0]+u[1]*v[1])))*180/Math.PI;
+const solve2=(u,v,F)=>{const d=u[0]*v[1]-v[0]*u[1];if(Math.abs(d)<1e-6)return null;return [(F[0]*v[1]-v[0]*F[1])/d,(u[0]*F[1]-F[0]*u[1])/d]};
+function vxCompute(){
+  const p=vxPts(),H=px(p.H),W=S.load.vortex*G,asm=vxAsm(),wll=asm.mbs/4,o={cfg:S.vx.cfg,use:S.vx.use,W,asm,wll,checks:[]};
+  const uL=vu(H,px(p.L));let F;
+  if(S.vx.use==='dir'){const uR=vu(H,px(p.R));F=[W*(uL[0]+uR[0]),W*(uL[1]+uR[1])];o.rope=vang(uL,uR)}else F=[W*uL[0],W*uL[1]];
+  o.F=F;o.Fa=Math.hypot(F[0],F[1]);o.uF=o.Fa>1e-9?[F[0]/o.Fa,F[1]/o.Fa]:[0,-1];
+  o.util=o.Fa/wll;o.gWLL=o.util<=0.8?'ok':o.util<=1.0001?'warn':'bad';
+  if(o.cfg==='tripod'){o.lean=vang(o.uF,[0,-1])}
+  if(o.cfg==='aframe'){
+    const f=vu(H,px(p.F)),g=vu(H,px(p.G));o.afa=vang(o.uF,f);o.guy=vang(f,g);
+    const s=solve2(f,[-g[0],-g[1]],F);if(s){o.C=s[0];o.T=s[1]}else{o.C=NaN;o.T=NaN}
+    o.gGuy=(o.guy>=45&&o.guy>=o.afa)?'ok':(o.guy>=30&&o.guy>=o.afa)?'warn':'bad';
+    o.gForce=!isFinite(o.C)||o.C<0?'bad':(!isFinite(o.T)||o.T<0)?'warn':'ok';
+  }
+  if(o.cfg==='easel'){
+    const f1=vu(H,px(p.F)),f2=vu(H,px(p.E)),s=solve2(f1,f2,F);o.C1=s?s[0]:NaN;o.C2=s?s[1]:NaN;
+    o.tilt=vang(f1,[0,-1]);o.inside=o.C1>=0&&o.C2>=0;
+    o.gForce=!isFinite(o.C1)||o.C1<0?'bad':o.C2<0?'warn':'ok';
+  }
+  const rank={ok:0,warn:1,bad:2},gs=[o.gWLL,o.gGuy,o.gForce].filter(Boolean);
+  o.grade=gs.reduce((a,b)=>rank[b]>rank[a]?b:a,'ok');return o;
+}
+const kNf=v=>isFinite(v)?v.toFixed(2)+' kN':'—';
+function drawVortex(){
+  const v=vxCompute(),p=vxPts(),H=px(p.H),Q=k=>px(p[k]);LQ=[];
+  const line=(a,b,c,w)=>{ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=w+3;ln(a,b);ctx.strokeStyle=c;ctx.lineWidth=w;ln(a,b)};
+  ctx.lineCap='round';
+  if(v.cfg==='aframe'){line(H,Q('F'),'#c9d3de',7);line(H,Q('G'),'#4c8dff',3)}
+  if(v.cfg==='easel'){line(H,Q('F'),'#c9d3de',7);line(H,Q('E'),'#c9d3de',7)}
+  line(H,Q('L'),'#f26a2e',4);if(v.use==='dir')line(H,Q('R'),'#f26a2e',4);
+  // applied force: dashed line of action to the edge of the view, solid arrow at the head
+  {const d=[v.uF[0],-v.uF[1]],L=Math.max(CW,CH)*2;ctx.setLineDash([7,7]);ctx.lineWidth=2;ctx.strokeStyle='rgba(255,90,90,.85)';ln(H,[H[0]+d[0]*L,H[1]+d[1]*L]);ctx.setLineDash([]);
+   arrow(H,[H[0]+d[0]*78,H[1]+d[1]*78],BAND_COL[v.gWLL]||'#ff5a5a','Applied '+kNf(v.Fa))}
+  const mid=(a,b,t,f=.62,c)=>label(a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,t,false,c);
+  if(v.cfg==='aframe'){
+    mid(H,Q('F'),isFinite(v.C)?(v.C>=0?'Frame '+kg(v.C)+' kg':'Frame in tension'):'—');
+    const gc=BAND_COL[v.gGuy];mid(H,Q('G'),'Guy '+v.guy.toFixed(0)+'°'+(isFinite(v.T)&&v.T>=0?' · '+kg(v.T)+' kg':' · slack'),.5,gc)}
+  if(v.cfg==='easel'){
+    mid(H,Q('F'),isFinite(v.C1)?(v.C1>=0?'A-frame '+kg(v.C1)+' kg':'A-frame in tension'):'—');
+    mid(H,Q('E'),isFinite(v.C2)?(v.C2>=0?'Easel '+kg(v.C2)+' kg':'Easel pulling '+kg(-v.C2)+' kg'):'—',.5)}
+  const lab={H:'H',F:'F',G:'G',E:'E',L:'L',R:'R'};
+  for(const k of vxKeys()){const P=Q(k);ctx.fillStyle=k==='H'?'#f26a2e':k==='G'?'#2f6fe0':'#132030';ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(P[0],P[1],14,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='700 13px JetBrains Mono,ui-monospace,monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lab[k],P[0],P[1]+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
+  const q=LQ;LQ=null;for(const a of q)label(...a);
+  renderVortex(v);chips();
+}
+function renderVortex(v){
+  const pct=Math.round(v.util*100);
+  let h=cell('Applied force',kNf(v.Fa).replace(' kN',''),'kN · '+kg(v.Fa)+' kg'+(v.use==='dir'?' · ×'+(v.Fa/v.W).toFixed(2)+' load':''),v.gWLL)
+    +cell('WLL used',pct+'%','of '+v.wll.toFixed(1)+' kN ('+v.asm.mbs+' kN MBS ÷ 4)',v.gWLL);
+  if(v.cfg==='tripod')h+=cell('Force from vertical',v.lean.toFixed(0)+'°','keep it inside the feet')+cell('Mode',v.use==='dir'?'Directional':'Anchor','frame');
+  if(v.cfg==='aframe')h+=cell('Guy angle',v.guy.toFixed(0)+'°','force angle '+v.afa.toFixed(0)+'°',v.gGuy)
+    +cell('Guy load',isFinite(v.T)&&v.T>=0?kg(v.T):'slack','kg'+(isFinite(v.T)&&v.T>=0?' · '+kn(v.T):''),v.gForce)
+    +cell('Frame (both legs)',isFinite(v.C)&&v.C>=0?kg(v.C):'tension','kg compression'+(isFinite(v.C)&&v.C>=0?' · '+kn(v.C):''),v.gForce);
+  if(v.cfg==='easel')h+=cell('A-frame section',isFinite(v.C1)?(v.C1>=0?kg(v.C1):'tension'):'—','kg compression',v.C1<0?'bad':null)
+    +cell('Easel leg',isFinite(v.C2)?kg(Math.abs(v.C2)):'—','kg '+(v.C2>=0?'compression':'TENSION'),v.C2<0?'warn':null)
+    +cell('A-frame lean',v.tilt.toFixed(0)+'°','from vertical',v.tilt>5?'warn':null);
+  let c=v.grade,t;const msgs=[];
+  if(v.gWLL==='bad')msgs.push(`Applied force ${v.Fa.toFixed(1)} kN is over the ${v.wll.toFixed(1)} kN WLL for this assembly.`);
+  else if(v.gWLL==='warn')msgs.push(`Applied force is ${pct}% of the WLL.`);
+  if(v.cfg==='tripod')msgs.push('Keep the applied force inside the triangle of feet, with each pair of feet hobbled. One photo can’t check the footprint.');
+  if(v.cfg==='aframe'){
+    if(v.C<0)msgs.push('The frame would be pulled, not pushed. The feet can’t take tension. Re-rig.');
+    else if(!isFinite(v.T)||v.T<0)msgs.push('The applied force leans back past the frame, so this guy goes slack and the guy on the other side takes the load. Move G onto that guy to check it (the manual requires front and back guys).');
+    else if(false)msgs.push('The frame would be pulled, not pushed. The feet can’t take tension. Re-rig.');
+    if(v.guy<30)msgs.push('Guy angle under 30°: the manual says never.');else if(v.guy<45)msgs.push('Guy angle under 45°: allowed, but the manual says keep it above 45° where possible.');
+    if(v.guy<v.afa)msgs.push(`Guy angle (${v.guy.toFixed(0)}°) is less than the applied force angle (${v.afa.toFixed(0)}°), so the guy carries more than the applied force.`);
+    if(!msgs.length||(v.grade==='ok'&&msgs.length===0))msgs.push('Applied force inside the WLL and the guy meets the manual’s angle rules.');}
+  if(v.cfg==='easel'){
+    if(v.C1<0)msgs.push('The applied force falls outside the feet, towards the load: the frame will tip over the edge. Add a back guy.');
+    else if(v.C2<0)msgs.push('The easel leg is being pulled. Secure that foot against tension (lash or bolt it); the Flat Foot ball joints aren’t designed for tension.');
+    else msgs.push('Applied force falls between the feet: both legs in compression.');
+    if(v.tilt>5)msgs.push('The manual’s certified easel setup has the A-frame section at 90° to the surface.');}
+  if(c==='ok'&&v.cfg!=='tripod')t='<span>Within limits.</span>';else t=c==='bad'?'<span>Not OK.</span>':c==='warn'?'<span>Caution.</span>':'<span>Check.</span>';
+  if(v.cfg==='tripod'&&c==='ok')c='info';
+  t+=`<span class="txt">${msgs.join(' ')} Manufacturer-tested figures; EN certification covers the equal-leg tripod only.</span>`;
+  const all=h+'|'+c+t;if(all===lastHTML)return;lastHTML=all;ro.innerHTML=h;st.className='status '+c;st.innerHTML=t;
+  $('ref').innerHTML='<tr><th>Assembly</th><th>MBS</th><th>WLL</th></tr>'+Object.entries(VX_ASM).flatMap(([k,a])=>a.map(x=>`<tr class="${x.id===v.asm.id?'hit':''}"><td>${VX_NAME[k]} · ${x.label}</td><td>${x.mbs} kN</td><td>${(x.mbs/4).toFixed(1)} kN</td></tr>`)).join('')
+    +'<tr><td>Gin pole · 1 outer + 1 inner, head ≤ 185 cm</td><td>22 kN</td><td>5.5 kN</td></tr>';
+}
+function vxSync(){
+  $('vxRow').hidden=S.mode!=='vortex';if(S.mode!=='vortex')return;
+  for(const b of $('vxCfg').querySelectorAll('button'))b.setAttribute('aria-pressed',b.dataset.c===S.vx.cfg);
+  for(const b of $('vxUse').querySelectorAll('button'))b.setAttribute('aria-pressed',b.dataset.u===S.vx.use);
+  $('vxAsm').innerHTML=VX_ASM[S.vx.cfg].map(a=>`<option value="${a.id}"${a.id===vxAsm().id?' selected':''}>${a.label} · WLL ${(a.mbs/4).toFixed(1)} kN</option>`).join('');
+}
+$('vxCfg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.vx.cfg=b.dataset.c;save();syncUI()});
+$('vxUse').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.vx.use=b.dataset.u;save();syncUI()});
+$('vxAsm').onchange=e=>{S.vx.asm[S.vx.cfg]=e.target.value;save();lastHTML=''};
+$('m-vortex').onclick=()=>{S.mode='vortex';save();syncUI()};
+const VX_HINT={tripod:'H on the head, L down the load line.',aframe:'H on the head, F on the feet (side view), G up the back guy, L down the load line.',easel:'H on the head, F on the A-frame feet, E on the easel foot, L down the load line.'};
 window.addEventListener('resize',size);if(window.ResizeObserver)new ResizeObserver(size).observe(stage);
 size();syncUI();requestAnimationFrame(frame);
 if(location.protocol!=='https:'&&location.hostname!=='localhost'){gateErr('Opened as a local file. The camera only works over HTTPS: host this file (see the instructions you were given), or use a photo for now.')}
