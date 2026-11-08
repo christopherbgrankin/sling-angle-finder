@@ -50,7 +50,8 @@ button:focus-visible,input:focus-visible,label.btn:focus-within{outline:3px soli
 .chips{position:absolute;top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
 .chip{font:700 12px var(--mono);padding:5px 9px;border-radius:999px;background:rgba(15,23,32,.82);border:1px solid var(--line);color:var(--ink);font-variant-numeric:tabular-nums}
 .chip.ok{color:var(--ok);border-color:var(--ok)} .chip.warn{color:var(--warn);border-color:var(--warn)} .chip.bad{color:var(--bad);border-color:var(--bad)}
-.shutter{position:absolute;bottom:14px;right:max(14px,env(safe-area-inset-right,0px));display:flex;gap:10px;align-items:center}
+.shutter{display:flex;gap:10px;align-items:center;justify-content:flex-end;background:var(--surface);border-bottom:1px solid var(--line);padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px))}
+.shutter .fab{box-shadow:none}
 .fab{font:700 14px/1 var(--body);letter-spacing:.05em;text-transform:uppercase;padding:14px 20px;border-radius:999px;border:2px solid #fff;background:var(--accent);color:var(--accent-ink);cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.5)}
 .fab.ghost{background:rgba(15,23,32,.8);color:#fff}
 .gate{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;background:radial-gradient(circle at 50% 40%,#1c2a38,#0b1118)}
@@ -92,7 +93,15 @@ tr.hit td{background:var(--warnbg)}
 tr.limit td{border-bottom:2px solid var(--bad)}
 .foot{font-size:12.5px;color:var(--muted);margin:0}
 .foot b{color:var(--ink)}
-#share-btn{order:2;margin-left:auto;font:600 13px/1 var(--body);background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;height:36px;padding:0 14px;cursor:pointer;white-space:nowrap}
+#share-btn{order:2;margin-left:8px;font:600 13px/1 var(--body);background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;height:36px;padding:0 14px;cursor:pointer;white-space:nowrap}
+#help-btn{order:2;font:700 17px/1 var(--body);width:36px;height:36px;border-radius:50%;border:1.5px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+#help-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px}
+#help-box{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;width:min(94vw,420px);max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+#help-box h2{font-size:20px;margin:0}
+#help-box svg{width:100%;height:auto;background:#0b1118;border-radius:12px}
+#help-box ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;line-height:1.45}
+#help-box .note{color:var(--muted);font-size:13px;margin:0}
+#help-close{background:rgba(255,255,255,.1);color:var(--ink);border:0;border-radius:12px;padding:12px 0;font:600 15px var(--body);cursor:pointer}
 #share-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px}
 #share-box{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px;width:min(90vw,340px);display:flex;flex-direction:column;align-items:center;gap:14px}
 #share-box h2{font-size:20px;text-align:center}
@@ -119,13 +128,14 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
 .stepper button:disabled{opacity:.35;cursor:default}
 .stepper output{min-width:40px;text-align:center;font:700 20px var(--mono);color:var(--ink)}
 [hidden]{display:none!important}
-.top h1{order:1}.top .seg{order:3}
+.top h1{order:1;margin-right:auto}.top .seg{order:3}
 </style>
 </head>
 <body>
 
 <div class="top">
   <h1>Sling <span>Angle</span></h1>
+  <button id="help-btn" type="button" aria-label="How to use this mode">?</button>
   <button id="share-btn" type="button">&#8599; Share</button>
   <div class="seg" role="group" aria-label="Mode">
     <button id="m-sling" aria-pressed="true">Sling</button>
@@ -138,10 +148,6 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
   <video id="vid" playsinline muted autoplay></video>
   <canvas id="cv" aria-label="Camera view with draggable measurement points"></canvas>
   <div class="chips" id="chips"></div>
-  <div class="shutter" id="shutter" hidden>
-    <button class="fab ghost" id="relock" hidden>Auto-lock</button>
-    <button class="fab" id="freeze">Freeze</button>
-  </div>
   <div class="gate" id="gate">
     <h2 style="font-size:22px">Live rig measurement</h2>
     <p>Uses the rear camera. Nothing is recorded or uploaded.</p>
@@ -150,6 +156,11 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <input id="pick" type="file" accept="image/*" hidden>
     <p class="err" id="gateErr" hidden></p>
   </div>
+</div>
+
+<div class="shutter" id="shutter" hidden>
+  <button class="fab ghost" id="relock" hidden>Auto-lock</button>
+  <button class="fab" id="freeze">Freeze</button>
 </div>
 
 <div class="sheet">
@@ -164,6 +175,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     </div>
     <div class="row" id="anchorRow">
       <div class="f">Anchors<div class="stepper"><button type="button" id="aMinus" aria-label="Remove anchor">−</button><output id="aCount">2</output><button type="button" id="aPlus" aria-label="Add anchor">+</button></div></div>
+      <button type="button" class="btn" id="ldReset" hidden>Reset load direction</button>
       <div class="seg" id="shareSeg" role="group" aria-label="How the legs share the load">
         <button type="button" id="sh-fixed" aria-pressed="true">Fixed</button>
         <button type="button" id="sh-equal" aria-pressed="false">Self-equalising</button>
@@ -184,6 +196,16 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
   <p class="foot"><b>How to use:</b> aim side-on to the rig, tap Freeze, then drag the points onto the ropes. Live mode also works: hold steady and line the rig up with the points. Hold the phone upright, side-on and square to the rig: an off-axis shot reads the angle wrong. <b>Planning and training aid only.</b> Loads are kg-force; check against doctrine and rated equipment (kN).</p>
 </div>
 
+<div id="help-modal" hidden>
+  <div id="help-box" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <h2 id="help-title"></h2>
+    <div id="help-svg"></div>
+    <ol id="help-steps"></ol>
+    <p class="note" id="help-note"></p>
+    <button id="help-close" type="button">Got it</button>
+  </div>
+</div>
+
 <div id="share-modal" hidden>
   <div id="share-box" role="dialog" aria-modal="true" aria-labelledby="share-title">
     <h2 id="share-title">Share Sling Angle</h2>
@@ -196,7 +218,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.08.5 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08.6 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -207,7 +229,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
 (()=>{
 const G=0.00980665, $=id=>document.getElementById(id);
 const stage=$('stage'),vid=$('vid'),cv=$('cv'),ctx=cv.getContext('2d');
-const S={auto:null,nA:2,share:'fixed',mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
+const S={auto:null,ldir:null,nA:2,share:'fixed',mode:'sling',load:{sling:250,edge:250,track:250},live:false,frozen:null,fit:'cover',
   pts:{sling:{A:[.2,.2],B:[.8,.24],P:[.5,.62],C:[.38,.1],D:[.62,.1]},edge:{A:[.15,.3],B:[.72,.85],P:[.55,.35]},track:{A:[.88,.2],B:[.1,.62],P:[.6,.7]}}};
 try{const s=JSON.parse(localStorage.getItem('saf-live')||'{}');if(s.load)S.load={...S.load,...s.load};if(s.mode)S.mode=s.mode;if(s.nA>=2&&s.nA<=4)S.nA=s.nA;if(s.share==='equal')S.share='equal'}catch(e){}
 const save=()=>{try{localStorage.setItem('saf-live',JSON.stringify({load:S.load,mode:S.mode,nA:S.nA,share:S.share}))}catch(e){}};
@@ -253,14 +275,14 @@ function compute(){
   let qa=rot([ax,ay]),qb=rot([bx,by]);
   if(S.mode==='track'){const den=qa[1]+qb[1],valid=den>0.01,T=valid?Wn/den:NaN;return {ax,ay,bx,by,th,Wn,T,valid,ratio:T/Wn}}
   const pair=(u,v)=>{const D=u[0]*v[1]-v[0]*u[1];if(Math.abs(D)<1e-6)return null;const t1=-Wn*v[0]/D,t2=Wn*u[0]/D;return t1>=0&&t2>=0?[t1,t2]:null};
-  if(S.nA<=2){let dx=ax+bx,dy=ay+by;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+  if(S.nA<=2){let dx=ax+bx,dy=ay+by;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;if(S.ldir){dx=-S.ldir[0];dy=S.ldir[1]}
     const R=v=>[v[0]*dy-v[1]*dx,v[0]*dx+v[1]*dy];qa=R(qa);qb=R(qb);
     const t=pair(qa,qb),valid=!!t,TA=t?t[0]:NaN,TB=t?t[1]:NaN;
     return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN,legs:[{k:'A',T:TA},{k:'B',T:TB}],dir:[dx,dy]}}
   // 3-4 anchors
   const keys=ANCHORS.slice(0,S.nA),U=keys.map(k=>{const [x,y]=px(p[k]);let ux=x-Px,uy=-(y-Py);const l=Math.hypot(ux,uy)||1;return [ux/l,uy/l]});
   let oi=0,oj=1,om=-1;for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=Math.acos(Math.max(-1,Math.min(1,U[i][0]*U[j][0]+U[i][1]*U[j][1])))*180/Math.PI;if(a>om){om=a;oi=i;oj=j}}
-  let dx=U[oi][0]+U[oj][0],dy=U[oi][1]+U[oj][1];const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+  let dx=U[oi][0]+U[oj][0],dy=U[oi][1]+U[oj][1];const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;if(S.ldir){dx=-S.ldir[0];dy=S.ldir[1]}
   const Ur=U.map(v=>[v[0]*dy-v[1]*dx,v[0]*dx+v[1]*dy]);
   let T=U.map(()=>0),valid=false;
   if(S.share==='equal'){const sy=Ur.reduce((a,u)=>a+u[1],0);valid=sy>.01&&Ur.every(u=>u[1]>-.01);T=U.map(()=>valid?Wn/sy:NaN)}
@@ -304,8 +326,13 @@ function frame(){
     for(let k=0;k<8&&PL.some(b=>Math.abs(b[0]-x)<(b[2]+w)/2+4&&Math.abs(b[1]-y)<24);k++)y+=(y>Q[1]?1:-1)*24;
     PL.push([x,y,w]);label(x,y,t)};
   const PL=[];
-  if(S.mode!=='edge'){const ld=S.mode==='sling'&&r.dir?[-r.dir[0],r.dir[1]]:[0,1];arrow(P,[P[0]+ld[0]*62,P[1]+ld[1]*62],'#e6edf4',kg(r.Wn)+' kg');
-    if(!r.valid&&S.mode==='sling')label(P[0]+(P[0]<CW/2?1:-1)*84,P[1]+24,'Load will swing',false,BAND_COL.bad);
+  if(S.mode!=='edge'){const ld=S.mode==='sling'&&r.dir?[-r.dir[0],r.dir[1]]:[0,1];
+    if(S.mode==='sling'){const W=wPos(P,r),dd=Math.hypot(W[0]-P[0],W[1]-P[1]),e=Math.max(20,dd-16);arrow(P,[P[0]+ld[0]*e,P[1]+ld[1]*e],'#e6edf4','');
+      const sx=-ld[1],sy=ld[0],sg=(W[0]+sx*60>CW-40||W[0]+sx*60<40)?-1:1;label(W[0]+sg*sx*58+ld[0]*8,W[1]+sg*sy*58+ld[1]*8,kg(r.Wn)+' kg')}
+    else arrow(P,[P[0]+ld[0]*62,P[1]+ld[1]*62],'#e6edf4',kg(r.Wn)+' kg');
+    if(S.mode==='sling'){const W=wPos(P,r);ctx.fillStyle='#e6edf4';ctx.strokeStyle=S.ldir?'#f5d33a':'#0b1118';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(W[0],W[1],13,0,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#0b1118';ctx.font='700 13px JetBrains Mono,ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('W',W[0],W[1]+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
+    if(!r.valid&&S.mode==='sling')label(P[0]+(P[0]<CW/2?1:-1)*84,P[1]-30,'Pulls outside anchors',false,BAND_COL.bad);
     if(r.valid){if(S.mode==='sling'){const pre=r.multi?'':'Anchor · ',QQ={A,B,...Object.fromEntries(EX)};for(const g of r.legs)near(QQ[g.k],pre+kg(g.T)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
   else{near(A,'Anchor');
     {let dx=B[0]-P[0],dy=B[1]-P[1];const l=Math.hypot(dx,dy)||1;dx/=l;dy/=l;let len=64;
@@ -319,6 +346,8 @@ function frame(){
   render(r);chips();
   requestAnimationFrame(frame);
 }
+function wPos(P,r){const ld=r&&r.dir?[-r.dir[0],r.dir[1]]:[0,1];const L=Math.min(110,Math.max(70,Math.min(CW,CH)*.22));
+  return [Math.max(16,Math.min(CW-16,P[0]+ld[0]*L)),Math.max(16,Math.min(CH-16,P[1]+ld[1]*L))]}
 function ln(a,b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
 let LQ=null;
 const BAND_COL={ok:'#5fc470',warn:'#f5d33a',bad:'#ff5a5a'};
@@ -333,7 +362,7 @@ function label(x,y,t,big,col){if(LQ){LQ.push([x,y,t,big,col]);return}ctx.font=(b
   ctx.fillStyle=col?'#0f1720':'#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,x,y+1);ctx.textAlign='left';ctx.textBaseline='alphabetic'}
 function arrow(a,b,c,t){const ang=Math.atan2(b[1]-a[1],b[0]-a[0]);ctx.strokeStyle='#000';ctx.lineWidth=6;ln(a,b);ctx.strokeStyle=c;ctx.fillStyle=c;ctx.lineWidth=3;ln(a,b);
   ctx.beginPath();ctx.moveTo(b[0]+Math.cos(ang)*8,b[1]+Math.sin(ang)*8);ctx.lineTo(b[0]+Math.cos(ang+2.5)*12,b[1]+Math.sin(ang+2.5)*12);ctx.lineTo(b[0]+Math.cos(ang-2.5)*12,b[1]+Math.sin(ang-2.5)*12);ctx.fill();
-  label(b[0]+Math.cos(ang)*24,b[1]+Math.sin(ang)*24,t)}
+  if(t)label(b[0]+Math.cos(ang)*24,b[1]+Math.sin(ang)*24,t)}
 function loupe(Q){const R=54,Z=3,cx=Q[0]<CW/2?CW-R-12:R+12,cy=R+44;
   ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.clip();ctx.fillStyle='#000';ctx.fillRect(cx-R,cy-R,2*R,2*R);
   if(S.frozen){const r=imgRect(),ix=(Q[0]-r.x)/r.s,iy=(Q[1]-r.y)/r.s,sw=2*R/(Z*r.s);ctx.drawImage(S.frozen,ix-sw/2,iy-sw/2,sw,sw,cx-R,cy-R,2*R,2*R)}
@@ -352,7 +381,7 @@ function render(r){
      +r.legs.map(g=>cell('Anchor '+g.k,r.valid?kg(g.T):'—','kg · '+(r.valid?kn(g.T):'')+'')).join('')
      +cell('Worst anchor',r.valid?Math.round(r.worst*100)+'%':'—','of load');
     const how=!r.multi?'':S.share==='fixed'?' Fixed legs: load split by each leg\'s angle, assuming all legs are snug and the same rope.':' Self-equalising: every leg carries the same load.';
-    if(!r.valid){c='bad';t='<span>Load will swing.</span><span class="txt">L is outside the anchors (past the outermost anchor). With nothing else holding it, the load swings back under the anchors, so there are no fixed numbers for this position. Move L so it sits under or between the anchors.</span>'}
+    if(!r.valid){c='bad';t='<span>Pulls outside the anchors.</span><span class="txt">The load direction (W) is outside the spread of the legs, so a leg goes slack and the master point will shift. Move W back between the legs, or tap Reset load direction.</span>'}
     else if(r.worst<=0.7072){c='ok';t=`<span>Good.</span><span class="txt">Each anchor carries 71% of the load or less.${how}</span>`}
     else if(r.worst<=1.0001){c='warn';t=`<span>Caution.</span><span class="txt">An anchor carries 71–100% of the load. Narrow the angle if you can.${how}</span>`}
     else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load. Narrow the angle.${how}</span>`}
@@ -451,7 +480,7 @@ function autoLock(){
   const tip=a=>{for(let s=a.end*.92;s>0;s-=1){const q=toN(v.P[0]+a.dir[0]*s,v.P[1]+a.dir[1]*s);if(inV(q))return q}return null};
   let A=tip(v.A),B=tip(v.B);if(!A||!B){S.auto='fail';return false}
   if(S.mode==='track'?A[1]>B[1]:A[0]>B[0])[A,B]=[B,A];
-  S.pts[S.mode]={...S.pts[S.mode],P,A,B};if(S.mode==='sling')for(const k of ANCHORS.slice(2,S.nA))placeExtra(k);S.auto='ok';lastHTML='';return true;
+  S.pts[S.mode]={...S.pts[S.mode],P,A,B};if(S.mode==='sling'){for(const k of ANCHORS.slice(2,S.nA))placeExtra(k);S.ldir=null;updLdir()}S.auto='ok';lastHTML='';return true;
 }
 let lastChips='';
 function chips(){
@@ -467,8 +496,9 @@ function chips(){
 function evPt(e){const b=cv.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]}
 cv.addEventListener('pointerdown',e=>{if(!S.live&&!S.frozen)return;const [x,y]=evPt(e),p=S.pts[S.mode];let best=null,bd=1e9;
   for(const k of (S.mode==='sling'?['P',...ANCHORS.slice(0,S.nA)]:['P','A','B'])){const [qx,qy]=px(p[k]);const d=Math.hypot(qx-x,qy-y);if(d<bd){bd=d;best=k}}
+  if(S.mode==='sling'){const [wx,wy]=wPos(px(p.P),compute());const d=Math.hypot(wx-x,wy-y);if(d<bd){bd=d;best='W'}}
   if(bd<44){drag=best;if(S.auto)S.auto='adj';cv.setPointerCapture(e.pointerId);e.preventDefault()}});
-cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);S.pts[S.mode][drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=evPt(e);if(drag==='W'){const [qx,qy]=px(S.pts.sling.P);const l=Math.hypot(x-qx,y-qy);if(l>8){S.ldir=[(x-qx)/l,(y-qy)/l];updLdir()}return}S.pts[S.mode][drag]=[Math.max(0,Math.min(1,x/CW)),Math.max(0,Math.min(1,y/CH))]});
 const end=()=>{drag=null};
 for(const ev of ['touchstart','touchmove'])cv.addEventListener(ev,e=>{if(S.live||S.frozen)e.preventDefault()},{passive:false});
 cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
@@ -477,7 +507,7 @@ const loadIn=$('load');
 function syncUI(){
   $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
   $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];
-  $('modeHint').textContent=({sling:'L on the master point, A and B (and C, D if added) up each anchor leg. The load pulls along the dashed line that splits the angle. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('modeHint').textContent=({sling:'L on the master point, A and B (and C, D if added) up each anchor leg. W is the load direction: it follows the dashed split line until you drag it. Tap ? for a diagram.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
   $('anchorRow').hidden=S.mode!=='sling';$('aCount').value=S.nA;$('aCount').textContent=S.nA;$('aMinus').disabled=S.nA<=2;$('aPlus').disabled=S.nA>=4;
   $('shareSeg').hidden=S.nA<3;$('sh-fixed').setAttribute('aria-pressed',S.share==='fixed');$('sh-equal').setAttribute('aria-pressed',S.share==='equal');
   $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
@@ -488,6 +518,8 @@ function syncUI(){
 }
 function placeExtra(k){const pt=S.pts.sling,a=pt.A,b=pt.B;pt[k]=[Math.max(.06,Math.min(.94,(a[0]+b[0])/2+(k==='D'?.1:-.1))),Math.max(.15,Math.min(a[1],b[1])-.17)]}
 $('aPlus').onclick=()=>{if(S.nA<4){S.nA++;placeExtra(ANCHORS[S.nA-1]);save();syncUI()}};
+function updLdir(){$('ldReset').hidden=!S.ldir;lastHTML=''}
+$('ldReset').onclick=()=>{S.ldir=null;updLdir()};
 $('aMinus').onclick=()=>{if(S.nA>2){S.nA--;save();syncUI()}};
 $('sh-fixed').onclick=()=>{S.share='fixed';save();syncUI()};$('sh-equal').onclick=()=>{S.share='equal';save();syncUI()};
 $('presets').addEventListener('click',e=>{const b=e.target.closest('.pre');if(!b)return;S.load[S.mode]=+b.dataset.v;save();syncUI()});
@@ -534,6 +566,43 @@ $('share-modal').addEventListener('click',e=>{if(e.target.id==='share-modal')clo
   btn.onclick=()=>check(true);
   go.onclick=()=>location.reload();
 })();
+
+/* ---------- help ---------- */
+const HELP={
+ sling:{t:'Sling: load on each anchor',
+  svg:`<svg viewBox="0 0 320 200" font-family="JetBrains Mono,monospace" font-size="12"><rect x="10" y="14" width="300" height="10" fill="#3a4757"/>
+   <line x1="70" y1="30" x2="160" y2="120" stroke="#f26a2e" stroke-width="5"/><line x1="250" y1="30" x2="160" y2="120" stroke="#f26a2e" stroke-width="5"/>
+   <line x1="160" y1="30" x2="160" y2="195" stroke="#fff" stroke-dasharray="6 6" stroke-width="1.5"/>
+   <path d="M136 96 A34 34 0 0 1 184 96" stroke="#5fc470" stroke-width="4" fill="none"/><text x="160" y="84" fill="#5fc470" text-anchor="middle">angle</text>
+   <line x1="160" y1="120" x2="160" y2="172" stroke="#e6edf4" stroke-width="3"/><path d="M152 166 L160 180 L168 166Z" fill="#e6edf4"/>
+   <circle cx="70" cy="30" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="70" y="34" fill="#fff" text-anchor="middle">A</text>
+   <circle cx="250" cy="30" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="250" y="34" fill="#fff" text-anchor="middle">B</text>
+   <circle cx="160" cy="120" r="12" fill="#f26a2e" stroke="#fff" stroke-width="2"/><text x="160" y="124" fill="#fff" text-anchor="middle">L</text>
+   <circle cx="160" cy="184" r="11" fill="#e6edf4" stroke="#0b1118" stroke-width="2"/><text x="160" y="188" fill="#0b1118" text-anchor="middle">W</text></svg>`,
+  steps:['Put <b>L</b> on the master point, where the legs meet.','Put <b>A</b> and <b>B</b> up each anchor leg (on the rope, not necessarily at the anchor).','<b>W</b> shows which way the load pulls. It follows the dashed line that splits the angle; drag W if your mainline pulls off to one side.','Use <b>+</b> under the load presets for a third or fourth anchor (C, D).'],
+  note:'Green: each anchor 71% of the load or less. Yellow: up to 100%. Red: an anchor carries more than the load.'},
+ edge:{t:'Redirection: load on the redirect anchor',
+  svg:`<svg viewBox="0 0 320 200" font-family="JetBrains Mono,monospace" font-size="12"><rect x="0" y="14" width="10" height="120" fill="#3a4757"/>
+   <line x1="18" y1="60" x2="200" y2="60" stroke="#f26a2e" stroke-width="5"/><line x1="200" y1="60" x2="250" y2="175" stroke="#f26a2e" stroke-width="5"/>
+   <line x1="200" y1="60" x2="248" y2="16" stroke="#ff6b6b" stroke-width="4"/><path d="M244 10 L258 10 L252 24Z" fill="#ff6b6b"/><text x="236" y="16" fill="#ff6b6b" text-anchor="end">anchor load</text>
+   <line x1="250" y1="175" x2="262" y2="196" stroke="#e6edf4" stroke-width="3"/>
+   <circle cx="30" cy="60" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="30" y="64" fill="#fff" text-anchor="middle">A</text>
+   <circle cx="200" cy="60" r="12" fill="#f26a2e" stroke="#fff" stroke-width="2"/><text x="200" y="64" fill="#fff" text-anchor="middle">E</text>
+   <circle cx="245" cy="165" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="245" y="169" fill="#fff" text-anchor="middle">B</text></svg>`,
+  steps:['Put <b>E</b> on the pulley or edge (the redirection anchor).','Put <b>A</b> along the rope towards its anchor.','Put <b>B</b> along the rope towards the load. The white arrow shows the line of pull.','Set the load on the rope. The red arrow is the load on the redirection anchor.'],
+  note:'Assumes a free-running pulley. Over an edge, real loads differ because of friction.'},
+ track:{t:'Deflection: track line anchors',
+  svg:`<svg viewBox="0 0 320 200" font-family="JetBrains Mono,monospace" font-size="12"><rect x="290" y="0" width="30" height="200" fill="#3a4757"/>
+   <line x1="285" y1="22" x2="170" y2="110" stroke="#f26a2e" stroke-width="5"/><line x1="170" y1="110" x2="20" y2="160" stroke="#f26a2e" stroke-width="5"/>
+   <line x1="170" y1="110" x2="170" y2="168" stroke="#e6edf4" stroke-width="3"/><path d="M162 162 L170 176 L178 162Z" fill="#e6edf4"/>
+   <circle cx="275" cy="30" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="275" y="34" fill="#fff" text-anchor="middle">A</text>
+   <circle cx="30" cy="157" r="12" fill="#132030" stroke="#fff" stroke-width="2"/><text x="30" y="161" fill="#fff" text-anchor="middle">B</text>
+   <circle cx="170" cy="110" r="12" fill="#f26a2e" stroke="#fff" stroke-width="2"/><text x="170" y="114" fill="#fff" text-anchor="middle">L</text></svg>`,
+  steps:['Put <b>L</b> on the load pulley on the track line.','Put <b>A</b> up the line towards the top anchor.','Put <b>B</b> down the line towards the bottom anchor (the appliance).','Both anchors carry the same load. Check it at the flattest point the load will reach.'],
+  note:'Hold the phone level and side-on: this mode uses straight down for the load. Flat lines give big numbers from small angle errors.'}};
+function openHelp(){const h=HELP[S.mode];$('help-title').textContent=h.t;$('help-svg').innerHTML=h.svg;$('help-steps').innerHTML=h.steps.map(x=>`<li>${x}</li>`).join('');$('help-note').textContent=h.note;$('help-modal').hidden=false}
+$('help-btn').onclick=openHelp;$('help-close').onclick=()=>{$('help-modal').hidden=true};
+$('help-modal').addEventListener('click',e=>{if(e.target.id==='help-modal')$('help-modal').hidden=true});
 window.addEventListener('resize',size);if(window.ResizeObserver)new ResizeObserver(size).observe(stage);
 size();syncUI();requestAnimationFrame(frame);
 if(location.protocol!=='https:'&&location.hostname!=='localhost'){gateErr('Opened as a local file. The camera only works over HTTPS: host this file (see the instructions you were given), or use a photo for now.')}
