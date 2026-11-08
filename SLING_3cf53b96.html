@@ -196,7 +196,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.08.4 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08.5 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -253,23 +253,27 @@ function compute(){
   let qa=rot([ax,ay]),qb=rot([bx,by]);
   if(S.mode==='track'){const den=qa[1]+qb[1],valid=den>0.01,T=valid?Wn/den:NaN;return {ax,ay,bx,by,th,Wn,T,valid,ratio:T/Wn}}
   const pair=(u,v)=>{const D=u[0]*v[1]-v[0]*u[1];if(Math.abs(D)<1e-6)return null;const t1=-Wn*v[0]/D,t2=Wn*u[0]/D;return t1>=0&&t2>=0?[t1,t2]:null};
-  if(S.nA<=2){const t=pair(qa,qb),valid=!!t,TA=t?t[0]:NaN,TB=t?t[1]:NaN;
-    return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN,legs:[{k:'A',T:TA},{k:'B',T:TB}]}}
+  if(S.nA<=2){let dx=ax+bx,dy=ay+by;const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+    const R=v=>[v[0]*dy-v[1]*dx,v[0]*dx+v[1]*dy];qa=R(qa);qb=R(qb);
+    const t=pair(qa,qb),valid=!!t,TA=t?t[0]:NaN,TB=t?t[1]:NaN;
+    return {ax,ay,bx,by,th,Wn,TA,TB,valid,worst:valid?Math.max(TA,TB)/Wn:NaN,legs:[{k:'A',T:TA},{k:'B',T:TB}],dir:[dx,dy]}}
   // 3-4 anchors
   const keys=ANCHORS.slice(0,S.nA),U=keys.map(k=>{const [x,y]=px(p[k]);let ux=x-Px,uy=-(y-Py);const l=Math.hypot(ux,uy)||1;return [ux/l,uy/l]});
   let oi=0,oj=1,om=-1;for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=Math.acos(Math.max(-1,Math.min(1,U[i][0]*U[j][0]+U[i][1]*U[j][1])))*180/Math.PI;if(a>om){om=a;oi=i;oj=j}}
+  let dx=U[oi][0]+U[oj][0],dy=U[oi][1]+U[oj][1];const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+  const Ur=U.map(v=>[v[0]*dy-v[1]*dx,v[0]*dx+v[1]*dy]);
   let T=U.map(()=>0),valid=false;
-  if(S.share==='equal'){const sy=U.reduce((a,u)=>a+u[1],0);valid=sy>.01&&U.every(u=>u[1]>-.01);T=U.map(()=>valid?Wn/sy:NaN)}
+  if(S.share==='equal'){const sy=Ur.reduce((a,u)=>a+u[1],0);valid=sy>.01&&Ur.every(u=>u[1]>-.01);T=U.map(()=>valid?Wn/sy:NaN)}
   else{
     // Fixed legs: every leg snug and the same rope, so each stretches with the load point.
     // Solve the balance for all legs at once; a leg that would go slack carries nothing and is dropped.
     let act=U.map(()=>true);
-    for(let it=0;it<4;it++){let a=0,b=0,c=0;U.forEach((u,i)=>{if(act[i]){a+=u[0]*u[0];b+=u[0]*u[1];c+=u[1]*u[1]}});
+    for(let it=0;it<4;it++){let a=0,b=0,c=0;Ur.forEach((u,i)=>{if(act[i]){a+=u[0]*u[0];b+=u[0]*u[1];c+=u[1]*u[1]}});
       const det=a*c-b*b;if(Math.abs(det)<1e-9){valid=false;break}
-      const dx=-b*Wn/det,dy=a*Wn/det;T=U.map((u,i)=>act[i]?u[0]*dx+u[1]*dy:0);
+      const ex=-b*Wn/det,ey=a*Wn/det;T=Ur.map((u,i)=>act[i]?u[0]*ex+u[1]*ey:0);
       const neg=T.reduce((m,t,i)=>t<T[m]?i:m,0);if(T[neg]<-1e-9){act[neg]=false;continue}valid=true;break}
     if(!valid)T=T.map(()=>NaN)}
-  return {ax:U[oi][0],ay:U[oi][1],bx:U[oj][0],by:U[oj][1],th:om,Wn,valid,worst:valid?Math.max(...T)/Wn:NaN,legs:keys.map((k,i)=>({k,T:T[i]})),multi:true};
+  return {ax:U[oi][0],ay:U[oi][1],bx:U[oj][0],by:U[oj][1],th:om,Wn,valid,worst:valid?Math.max(...T)/Wn:NaN,legs:keys.map((k,i)=>({k,T:T[i]})),multi:true,dir:[dx,dy]};
 }
 const ANCHORS=['A','B','C','D'];
 const kg=v=>isFinite(v)?Math.round(v/G).toLocaleString():'—';
@@ -300,7 +304,7 @@ function frame(){
     for(let k=0;k<8&&PL.some(b=>Math.abs(b[0]-x)<(b[2]+w)/2+4&&Math.abs(b[1]-y)<24);k++)y+=(y>Q[1]?1:-1)*24;
     PL.push([x,y,w]);label(x,y,t)};
   const PL=[];
-  if(S.mode!=='edge'){arrow(P,[P[0],P[1]+62],'#e6edf4',kg(r.Wn)+' kg');
+  if(S.mode!=='edge'){const ld=S.mode==='sling'&&r.dir?[-r.dir[0],r.dir[1]]:[0,1];arrow(P,[P[0]+ld[0]*62,P[1]+ld[1]*62],'#e6edf4',kg(r.Wn)+' kg');
     if(!r.valid&&S.mode==='sling')label(P[0]+(P[0]<CW/2?1:-1)*84,P[1]+24,'Load will swing',false,BAND_COL.bad);
     if(r.valid){if(S.mode==='sling'){const pre=r.multi?'':'Anchor · ',QQ={A,B,...Object.fromEntries(EX)};for(const g of r.legs)near(QQ[g.k],pre+kg(g.T)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
   else{near(A,'Anchor');
@@ -473,7 +477,7 @@ const loadIn=$('load');
 function syncUI(){
   $('m-sling').setAttribute('aria-pressed',S.mode==='sling');$('m-edge').setAttribute('aria-pressed',S.mode==='edge');$('m-track').setAttribute('aria-pressed',S.mode==='track');
   $('loadLbl').firstChild.textContent=S.mode==='edge'?'Load on rope (kg)':'Rescue load (kg)';loadIn.value=S.load[S.mode];
-  $('modeHint').textContent=({sling:'L on the load or apex, A and B (and C, D if added) up each anchor leg. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
+  $('modeHint').textContent=({sling:'L on the master point, A and B (and C, D if added) up each anchor leg. The load pulls along the dashed line that splits the angle. Gives the load on each anchor.',edge:'E on the pulley or edge (the redirection anchor), A on the anchor, B along the rope towards the load. The arrow at B shows the line of pull. Gives the load on the redirection anchor.',track:'A on the top anchor, B on the bottom anchor, L on the load pulley. Gives the load on each anchor at that position.'})[S.mode];
   $('anchorRow').hidden=S.mode!=='sling';$('aCount').value=S.nA;$('aCount').textContent=S.nA;$('aMinus').disabled=S.nA<=2;$('aPlus').disabled=S.nA>=4;
   $('shareSeg').hidden=S.nA<3;$('sh-fixed').setAttribute('aria-pressed',S.share==='fixed');$('sh-equal').setAttribute('aria-pressed',S.share==='equal');
   $('refTitle').textContent=({sling:'Anchor angles',edge:'Redirection anchor loads',track:'Track line tension, load mid-span'})[S.mode];
