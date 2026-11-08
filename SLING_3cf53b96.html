@@ -196,7 +196,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.08.3 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08.4 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -301,6 +301,7 @@ function frame(){
     PL.push([x,y,w]);label(x,y,t)};
   const PL=[];
   if(S.mode!=='edge'){arrow(P,[P[0],P[1]+62],'#e6edf4',kg(r.Wn)+' kg');
+    if(!r.valid&&S.mode==='sling')label(P[0]+(P[0]<CW/2?1:-1)*84,P[1]+24,'Load will swing',false,BAND_COL.bad);
     if(r.valid){if(S.mode==='sling'){const pre=r.multi?'':'Anchor · ',QQ={A,B,...Object.fromEntries(EX)};for(const g of r.legs)near(QQ[g.k],pre+kg(g.T)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
   else{near(A,'Anchor');
     {let dx=B[0]-P[0],dy=B[1]-P[1];const l=Math.hypot(dx,dy)||1;dx/=l;dy/=l;let len=64;
@@ -347,7 +348,7 @@ function render(r){
      +r.legs.map(g=>cell('Anchor '+g.k,r.valid?kg(g.T):'—','kg · '+(r.valid?kn(g.T):'')+'')).join('')
      +cell('Worst anchor',r.valid?Math.round(r.worst*100)+'%':'—','of load');
     const how=!r.multi?'':S.share==='fixed'?' Fixed legs: load split by each leg\'s angle, assuming all legs are snug and the same rope.':' Self-equalising: every leg carries the same load.';
-    if(!r.valid){c='bad';t=`<span>Not in balance.</span><span class="txt">${r.multi?'The legs can\'t hold the load from these directions.':'Both legs sit on one side of the load or point down. It would swing.'} Re-check the points.</span>`}
+    if(!r.valid){c='bad';t='<span>Load will swing.</span><span class="txt">L is outside the anchors (past the outermost anchor). With nothing else holding it, the load swings back under the anchors, so there are no fixed numbers for this position. Move L so it sits under or between the anchors.</span>'}
     else if(r.worst<=0.7072){c='ok';t=`<span>Good.</span><span class="txt">Each anchor carries 71% of the load or less.${how}</span>`}
     else if(r.worst<=1.0001){c='warn';t=`<span>Caution.</span><span class="txt">An anchor carries 71–100% of the load. Narrow the angle if you can.${how}</span>`}
     else{c='bad';t=`<span>Over limit.</span><span class="txt">An anchor carries ${r.worst.toFixed(1)}× the load. Narrow the angle.${how}</span>`}
