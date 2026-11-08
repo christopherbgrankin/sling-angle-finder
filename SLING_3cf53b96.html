@@ -165,7 +165,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <div class="row" id="anchorRow">
       <div class="f">Anchors<div class="stepper"><button type="button" id="aMinus" aria-label="Remove anchor">−</button><output id="aCount">2</output><button type="button" id="aPlus" aria-label="Add anchor">+</button></div></div>
       <div class="seg" id="shareSeg" role="group" aria-label="How the legs share the load">
-        <button type="button" id="sh-fixed" aria-pressed="true">Fixed · worst case</button>
+        <button type="button" id="sh-fixed" aria-pressed="true">Fixed</button>
         <button type="button" id="sh-equal" aria-pressed="false">Self-equalising</button>
       </div>
     </div>
@@ -196,7 +196,7 @@ body:has(#update-bar:not([hidden])) .sheet{padding-bottom:96px}
     <button id="share-native" type="button">&#8599; Share link</button>
     <button id="update-check" type="button">&#8635; Check for updates</button>
     <div id="update-status" role="status"></div>
-    <p class="ver">Version 2026.11.08.2 · <span id="update-when"></span></p>
+    <p class="ver">Version 2026.11.08.3 · <span id="update-when"></span></p>
     <button id="share-close" type="button">Close</button>
   </div>
 </div>
@@ -260,7 +260,14 @@ function compute(){
   let oi=0,oj=1,om=-1;for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const a=Math.acos(Math.max(-1,Math.min(1,U[i][0]*U[j][0]+U[i][1]*U[j][1])))*180/Math.PI;if(a>om){om=a;oi=i;oj=j}}
   let T=U.map(()=>0),valid=false;
   if(S.share==='equal'){const sy=U.reduce((a,u)=>a+u[1],0);valid=sy>.01&&U.every(u=>u[1]>-.01);T=U.map(()=>valid?Wn/sy:NaN)}
-  else{for(let i=0;i<U.length;i++)for(let j=i+1;j<U.length;j++){const t=pair(U[i],U[j]);if(t){valid=true;T[i]=Math.max(T[i],t[0]);T[j]=Math.max(T[j],t[1])}}
+  else{
+    // Fixed legs: every leg snug and the same rope, so each stretches with the load point.
+    // Solve the balance for all legs at once; a leg that would go slack carries nothing and is dropped.
+    let act=U.map(()=>true);
+    for(let it=0;it<4;it++){let a=0,b=0,c=0;U.forEach((u,i)=>{if(act[i]){a+=u[0]*u[0];b+=u[0]*u[1];c+=u[1]*u[1]}});
+      const det=a*c-b*b;if(Math.abs(det)<1e-9){valid=false;break}
+      const dx=-b*Wn/det,dy=a*Wn/det;T=U.map((u,i)=>act[i]?u[0]*dx+u[1]*dy:0);
+      const neg=T.reduce((m,t,i)=>t<T[m]?i:m,0);if(T[neg]<-1e-9){act[neg]=false;continue}valid=true;break}
     if(!valid)T=T.map(()=>NaN)}
   return {ax:U[oi][0],ay:U[oi][1],bx:U[oj][0],by:U[oj][1],th:om,Wn,valid,worst:valid?Math.max(...T)/Wn:NaN,legs:keys.map((k,i)=>({k,T:T[i]})),multi:true};
 }
@@ -294,7 +301,7 @@ function frame(){
     PL.push([x,y,w]);label(x,y,t)};
   const PL=[];
   if(S.mode!=='edge'){arrow(P,[P[0],P[1]+62],'#e6edf4',kg(r.Wn)+' kg');
-    if(r.valid){if(S.mode==='sling'){const pre=r.multi?(S.share==='fixed'?'≤ ':''):'Anchor · ',QQ={A,B,...Object.fromEntries(EX)};for(const g of r.legs)near(QQ[g.k],pre+kg(g.T)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
+    if(r.valid){if(S.mode==='sling'){const pre=r.multi?'':'Anchor · ',QQ={A,B,...Object.fromEntries(EX)};for(const g of r.legs)near(QQ[g.k],pre+kg(g.T)+' kg')}else{near(A,'Anchor · '+kg(r.T)+' kg');near(B,'Anchor · '+kg(r.T)+' kg')}}}
   else{near(A,'Anchor');
     {let dx=B[0]-P[0],dy=B[1]-P[1];const l=Math.hypot(dx,dy)||1;dx/=l;dy/=l;let len=64;
      const room=(c,d,max)=>d>0?(max-14-c)/d:d<0?(c-14)/-d:1e9;len=Math.max(24,Math.min(len,room(B[0],dx,CW),room(B[1],dy,CH)));
@@ -337,9 +344,9 @@ function render(r){
   let h,c,t;
   if(S.mode==='sling'){
     h=cell('Internal',r.th.toFixed(0)+'°',r.multi?'outer legs':'',band(r))
-     +r.legs.map(g=>cell('Anchor '+g.k,r.valid?kg(g.T):'—','kg · '+(r.valid?kn(g.T):'')+(r.multi&&S.share==='fixed'?' max':''))).join('')
+     +r.legs.map(g=>cell('Anchor '+g.k,r.valid?kg(g.T):'—','kg · '+(r.valid?kn(g.T):'')+'')).join('')
      +cell('Worst anchor',r.valid?Math.round(r.worst*100)+'%':'—','of load');
-    const how=!r.multi?'':S.share==='fixed'?' Fixed legs: worst case, where any two legs take the whole load.':' Self-equalising: every leg carries the same load.';
+    const how=!r.multi?'':S.share==='fixed'?' Fixed legs: load split by each leg\'s angle, assuming all legs are snug and the same rope.':' Self-equalising: every leg carries the same load.';
     if(!r.valid){c='bad';t=`<span>Not in balance.</span><span class="txt">${r.multi?'The legs can\'t hold the load from these directions.':'Both legs sit on one side of the load or point down. It would swing.'} Re-check the points.</span>`}
     else if(r.worst<=0.7072){c='ok';t=`<span>Good.</span><span class="txt">Each anchor carries 71% of the load or less.${how}</span>`}
     else if(r.worst<=1.0001){c='warn';t=`<span>Caution.</span><span class="txt">An anchor carries 71–100% of the load. Narrow the angle if you can.${how}</span>`}
